@@ -2,7 +2,6 @@ import React from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Link, Tabs } from 'expo-router';
 import { Pressable } from 'react-native';
-
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
@@ -52,6 +51,22 @@ export default function TabLayout() {
         options={{
           title: 'Tab Two',
           tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
+        }}
+      />
+      {/* New Tab Three */}
+      <Tabs.Screen
+        name="three"
+        options={{
+          title: 'Transaction Tab',
+          tabBarIcon: ({ color }) => <TabBarIcon name="rocket" color={color} />,
+        }}
+      />
+      {/* New Tab Four */}
+      <Tabs.Screen
+        name="four"
+        options={{
+          title: 'Tab Four',
+          tabBarIcon: ({ color }) => <TabBarIcon name="leaf" color={color} />,
         }}
       />
     </Tabs>
