@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, TextInput, Button, Text, Alert, StyleSheet, ActivityIndicator, Image, TouchableOpacity } from 'react-native';
+import { View, TextInput, Button, Alert, StyleSheet, ActivityIndicator, Image, TouchableOpacity } from 'react-native';
 import axios from 'axios';
+import { Text } from '@/components/StyledText';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient'; // Import linear gradient for background effect
 import { FontAwesome } from '@expo/vector-icons'; // Import icons from Expo Vector Icons
@@ -190,6 +191,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 10,
     fontWeight: 'bold',
+    fontFamily: 'Poppins-Black'
   },
   inputContainer: {
     flexDirection: 'row',
@@ -207,6 +209,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 45,
     color: '#203B36',
+    fontFamily: 'Poppins-Regular',
   },
   icon: {
     marginRight: 10,
@@ -221,11 +224,14 @@ const styles = StyleSheet.create({
     marginTop: 20,
     backgroundColor: '#203B36',
     borderRadius: 8,
+    fontFamily: 'Poppins-ExtraBold',
+    fontWeight: 'bold',
   },
   greeting: {
     fontSize: 14,
     color: '#DDB04B',
     marginBottom: 15,
+    fontFamily: 'Poppins-Regular',
   },
 });
 

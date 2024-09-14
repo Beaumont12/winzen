@@ -1,8 +1,10 @@
+import React from 'react';
 import { StyleSheet } from 'react-native';
-import { Text, View } from '@/components/Themed';
+import { View } from '@/components/Themed';
 import { FontAwesome } from '@expo/vector-icons';
 import { Image, Pressable } from 'react-native';
 import EditScreenInfo from '@/components/EditScreenInfo';
+import { Text } from '@/components/StyledText';
 
 export default function TabFourScreen() {
   return (

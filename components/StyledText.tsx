@@ -1,5 +1,14 @@
-import { Text, TextProps } from './Themed';
+// StyledText.tsx
+import React from 'react';
+import { Text as DefaultText, TextProps as RNTextProps } from 'react-native';
 
-export function MonoText(props: TextProps) {
-  return <Text {...props} style={[props.style, { fontFamily: 'SpaceMono' }]} />;
+export type TextProps = RNTextProps & {
+  lightColor?: string;
+  darkColor?: string;
+};
+
+export function Text(props: TextProps) {
+  return <DefaultText {...props} style={[props.style, { fontFamily: 'Poppins-Regular' }]} />;
 }
+
+export default Text;
