@@ -5,6 +5,7 @@ import { Text } from '@/components/StyledText';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient'; // Import linear gradient for background effect
 import { FontAwesome } from '@expo/vector-icons'; // Import icons from Expo Vector Icons
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const LoginScreen: React.FC = () => {
   const [staffId, setStaffId] = useState('');
@@ -28,10 +29,29 @@ const LoginScreen: React.FC = () => {
         password: password,
       });
 
+      console.log('Server Response:', response.data);
+
       if (response.data.message === 'Successfully Logged In') {
+        const { token, staff } = response.data;
+
+        // Store staff information and token
+        const staffData = {
+          id: staff.id,
+          name: staff.name,
+          email: staff.email,
+          phone: staff.phone,
+          age: staff.age,
+          birthday: staff.birthday,
+          imageUrl: staff.imageUrl,
+          role: staff.role,
+        };
+
+        await AsyncStorage.setItem('staffInfo', JSON.stringify(staffData));
+        await AsyncStorage.setItem('token', token); // Optionally store the token
+      
         Alert.alert('Success', 'Successfully Logged In');
-        router.replace('/(tabs)/');
-      }
+        router.replace('/(tabs)/'); // Redirect to main application
+      }      
     } catch (error) {
       if (axios.isAxiosError(error)) {
         Alert.alert('Login Failed', error.response?.data?.message || 'An error occurred');

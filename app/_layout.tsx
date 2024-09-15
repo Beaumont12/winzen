@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -6,7 +6,10 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useColorScheme } from '@/components/useColorScheme';
 import { Stack, useRouter } from 'expo-router';
-import { Text } from '@/components/StyledText';
+import { View, StyleSheet } from 'react-native';
+
+// Prevent splash screen from hiding automatically until we decide to hide it
+SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [fontsLoaded, setFontsLoaded] = useState(false);
@@ -24,12 +27,12 @@ export default function RootLayout() {
     ...FontAwesome.font,
   });
 
-  useEffect(() => {
-    if (fontsLoadedStatus) {
-      setFontsLoaded(true);
-      SplashScreen.hideAsync();
+  // Callback to hide the splash screen when everything is ready
+  const onLayoutRootView = useCallback(async () => {
+    if (fontsLoaded && isLoggedIn !== null) {
+      await SplashScreen.hideAsync(); // Hide the splash screen after both fonts and login state are ready
     }
-  }, [fontsLoadedStatus]);
+  }, [fontsLoaded, isLoggedIn]);
 
   useEffect(() => {
     const checkLoginStatus = async () => {
@@ -41,46 +44,51 @@ export default function RootLayout() {
       }
     };
 
-    if (fontsLoaded) {
-      checkLoginStatus();
+    if (fontsLoadedStatus) {
+      setFontsLoaded(true); // Update state when fonts are loaded
+      checkLoginStatus(); // Check login status after fonts have been loaded
     }
-  }, [fontsLoaded]);
+  }, [fontsLoadedStatus]);
 
   useEffect(() => {
     if (isLoggedIn !== null) {
       if (isLoggedIn) {
-        router.replace('/(tabs)');
+        router.replace('/(tabs)'); // If logged in, navigate to the main tabs screen
       } else {
-        router.replace('/login');
+        router.replace('/login'); // If not logged in, navigate to the login screen
       }
     }
   }, [isLoggedIn, router]);
 
   useEffect(() => {
     if (fontError) {
-      throw fontError;
+      throw fontError; // Throw error if fonts failed to load
     }
   }, [fontError]);
 
+  // If fonts haven't loaded or login state is not determined yet, return null to show splash screen
   if (!fontsLoaded || isLoggedIn === null) {
-    return null;
+    return null; // Keep the splash screen visible
   }
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack screenOptions={{ headerShown: false}}>
-        {isLoggedIn ? (
-          <>
-            <Stack.Screen
-              name="(tabs)"
-            />
-          </>
-        ) : (
-          <Stack.Screen
-            name="login"
-          />
-        )}
-      </Stack>
+      {/* Use a View to handle the onLayout event for hiding splash screen */}
+      <View style={styles.container} onLayout={onLayoutRootView}>
+        <Stack screenOptions={{ headerShown: false }}>
+          {isLoggedIn ? (
+            <Stack.Screen name="(tabs)" /> // Load the main tabs if logged in
+          ) : (
+            <Stack.Screen name="login" /> // Load the login screen if not logged in
+          )}
+        </Stack>
+      </View>
     </ThemeProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});
