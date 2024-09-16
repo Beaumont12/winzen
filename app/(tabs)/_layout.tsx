@@ -18,16 +18,20 @@ export default function TabLayout() {
 
   return (
     <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-      }}>
+    screenOptions={{
+      tabBarActiveTintColor: '#DDB04B',  // Highlight color for the active tab
+      tabBarInactiveTintColor: '#FFFFFF', // Color for inactive tabs
+      headerShown: false,
+      tabBarStyle: {
+        backgroundColor: '#203B36',  // Tab bar background color
+      },
+    }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Tab One',
+          title: 'MENU',
           headerShown: false,
-          tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
+          tabBarIcon: ({ color }) => <TabBarIcon name="bars" color={color} />,
           headerRight: () => (
             <Link href="/modal" asChild>
               <Pressable>
@@ -47,27 +51,27 @@ export default function TabLayout() {
       <Tabs.Screen
         name="two"
         options={{
-          title: 'Tab Two',
+          title: 'ORDERS',
           headerShown: false,
-          tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
+          tabBarIcon: ({ color }) => <TabBarIcon name="shopping-cart" color={color} />,
         }}
       />
       {/* New Tab Three */}
       <Tabs.Screen
         name="three"
         options={{
-          title: 'Transaction Tab',
+          title: 'TRANSACTIONS',
           headerShown: false,
-          tabBarIcon: ({ color }) => <TabBarIcon name="rocket" color={color} />,
+          tabBarIcon: ({ color }) => <TabBarIcon name="history" color={color} />,
         }}
       />
       {/* New Tab Four */}
       <Tabs.Screen
         name="four"
         options={{
-          title: 'Tab Four',
+          title: 'PROFILE',
           headerShown: false,
-          tabBarIcon: ({ color }) => <TabBarIcon name="leaf" color={color} />,
+          tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
         }}
       />
     </Tabs>

@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, FlatList, TextInput, StyleSheet, Image, TouchableOpacity, Dimensions, Alert, ScrollView } from 'react-native';
 import axios from 'axios';
 import { Text } from '@/components/StyledText';
-import { Ionicons } from '@expo/vector-icons'; // For search icon
-import { MaterialIcons } from '@expo/vector-icons'; // For cup icons
+import { Ionicons, MaterialIcons } from '@expo/vector-icons'; // For search icons
 import { Picker } from '@react-native-picker/picker'; // Picker for discount selection
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -43,7 +42,7 @@ export default function TabOneScreen() {
   const [order, setOrder] = useState<Array<{ product: Product; variation: string; size: string; price: number; quantity: number }>>([]);
   const [customerName, setCustomerName] = useState('');
   const [discount, setDiscount] = useState<string | null>('');
-  const [dineIn, setDineIn] = useState(true); // Default option for Dine In / Take Out
+  const [dineIn, setDineIn] = useState(true);
   const [orderNumber, setOrderNumber] = useState(1);
   const [cashierName, setCashierName] = useState('');
 
@@ -74,8 +73,8 @@ export default function TabOneScreen() {
         
         if (storedStaffInfo) {
           const staffData = JSON.parse(storedStaffInfo);
-          const { name } = staffData; // Extract the name field
-          setCashierName(name); // Set the name state
+          const { name } = staffData; 
+          setCashierName(name); 
         } else {
           console.log('No staff information found.');
         }
@@ -86,7 +85,7 @@ export default function TabOneScreen() {
 
     fetchCategories();
     fetchProducts();
-    loadCashierInfo(); // Load cashier info on mount
+    loadCashierInfo(); 
   }, []);
 
   const clearOrder = () => {
@@ -104,21 +103,18 @@ export default function TabOneScreen() {
       return;
     }
   
-    // Update the order by finding if the product with the same variation and size already exists
     setOrder((prevOrder) => {
       const existingProductIndex = prevOrder.findIndex(
         (item) => item.product._id === product._id && item.variation === variation && item.size === size
       );
   
       if (existingProductIndex >= 0) {
-        // If the product is found, update the quantity
         return prevOrder.map((item, index) =>
           index === existingProductIndex
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
       } else {
-        // If the product doesn't exist, add it to the order
         return [...prevOrder, { product, variation, size, price, quantity: 1 }];
       }
     });
@@ -229,20 +225,60 @@ export default function TabOneScreen() {
         {
           text: 'Cancel',
           onPress: () => {
-            // Order is canceled, don't change the order number
             Alert.alert('Order Canceled');
           },
           style: 'cancel',
         },
         {
           text: 'Confirm',
-          onPress: () => {
-            // Proceed with order confirmation and print the bill
-            Alert.alert('Order Confirmed');
-            const newOrderNumber = orderNumber + 1;
-            setOrderNumber(newOrderNumber); // Increment order number
-            saveOrderNumber(newOrderNumber); // Save the new order number
-            clearOrder(); // Clear the current order after confirming
+          onPress: async () => {
+            const newOrder: Record<string, any> = {
+              _id: orderNumber.toString(),
+              CustomerName: customerName,
+              Discount: discountValue, 
+              OrderDateTime: new Date().toString(), 
+              OrderItems: {},
+              Preference: dineIn ? 'Dine In' : 'Take Out', 
+              StaffName: cashierName, 
+              Subtotal: subtotal, 
+              Total: total, 
+            };
+  
+            order.forEach((item, index) => {
+              newOrder.OrderItems[`Order_${index + 1}`] = {
+                Price: item.price,
+                ProductName: item.product.Name,
+                Quantity: item.quantity,
+                Size: item.size,
+                Variation: item.variation,
+              };
+            });
+  
+            console.log('New Order Payload:', newOrder);
+  
+            try {
+              const response = await axios.post('https://winzen-server-1.onrender.com/create-order', newOrder);
+              console.log('Response:', response);
+  
+              if (response.status === 201) { 
+                Alert.alert('Order Confirmed', 'Your order has been successfully confirmed.');
+  
+                const newOrderNumber = orderNumber + 1;
+                setOrderNumber(newOrderNumber); 
+                saveOrderNumber(newOrderNumber);
+  
+                // Clear the order after a successful confirmation
+                clearOrder();
+  
+              } else {
+                console.log('Response Status:', response.status);
+                console.log('Response Data:', response.data);
+                Alert.alert('Order Error', 'Failed to confirm the order.');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'An error occurred while confirming the order.');
+              console.error(error);
+            }
           },
         },
       ],
@@ -272,7 +308,7 @@ export default function TabOneScreen() {
     }
   };  
 
-    const addProductToOrder = (product: Product, variation: string, size: string, price: number) => {
+  const addProductToOrder = (product: Product, variation: string, size: string, price: number) => {
     setOrder(prevOrder => {
       // Check if the product with the same variation and size already exists in the order
       const existingProductIndex = prevOrder.findIndex(item => 
@@ -292,7 +328,6 @@ export default function TabOneScreen() {
       }
     });
   };
-
 
   // Function to decrement product quantity
   const decrementProductQuantity = (product: Product, variation: string, size: string) => {
@@ -366,87 +401,96 @@ export default function TabOneScreen() {
           windowSize={5}
         />
 
-        {/* Order summary */}
-        <ScrollView style={styles.orderSummaryContainer}>
-          <View style={styles.orderHeader}>
-          <Text style={styles.orderNumber}>Order #{String(orderNumber).padStart(3, '0')}</Text>
-            <TouchableOpacity onPress={clearOrder}>
-              <Text style={styles.clearAll}>Clear All</Text>
-            </TouchableOpacity>
-          </View>
+          <FlatList
+            style={styles.orderSummaryContainer}
+            data={order} 
+            keyExtractor={(item, index) => index.toString()}
+            renderItem={({ item, index }) => (
+              <View style={styles.productList}>
+                <View key={index} style={styles.productItem}>
+                <Image source={require('../../assets/images/littleorder.png')} style={styles.ordersum} />
+                <View style={styles.orderName}>
+                  <Text>{item.product.Name}</Text>
+                  <Text>{item.variation} {item.size}</Text>
+                </View>
+                <Text>P{item.price * item.quantity}</Text>
+                <View style={styles.counterContainer}>
+                  <TouchableOpacity onPress={() => decrementProductQuantity(item.product, item.variation, item.size)}>
+                    <Text style={styles.counterButton}>-</Text>
+                  </TouchableOpacity>
+                  <Text>{item.quantity}</Text>
+                  <TouchableOpacity onPress={() => addProductToOrder(item.product, item.variation, item.size, item.price)}>
+                    <Text style={styles.counterButton}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+            )}
+            ListHeaderComponent={() => (
+              <View style={styles.orderSummary}>
+                <View style={styles.orderHeader}>
+                  <Text style={styles.orderNumber}>Order #{String(orderNumber).padStart(3, '0')}</Text>
+                  <TouchableOpacity onPress={clearOrder}>
+                    <Text style={styles.clearAll}>Clear All</Text>
+                  </TouchableOpacity>
+                </View>
 
-          <Text style={styles.cashier}>Cashier: {cashierName}</Text>
+                <Text style={styles.cashier}>Cashier: {cashierName}</Text>
 
-          <TextInput
-            placeholder="Enter Customer Name"
-            style={styles.customerNameInput}
-            value={customerName}
-            onChangeText={setCustomerName}
+                <TextInput
+                  placeholder="Enter Customer Name"
+                  style={styles.customerNameInput}
+                  value={customerName}
+                  onChangeText={setCustomerName}
+                />
+              </View>
+            )}
+            ListFooterComponent={() => (
+              <View>
+                <View style={styles.summaryDetails}>
+                  <View style={styles.productItem}>
+                    <Text>Subtotal</Text>
+                    <Text>P{subtotal.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.pickerWrapper}>
+                    <Picker selectedValue={discount} onValueChange={setDiscount} style={styles.picker}>
+                    <Picker.Item label="Select Discount" value="none" />
+                    <Picker.Item label="Senior Citizen" value="senior" />
+                    <Picker.Item label="PWD" value="pwd" />
+                    <Picker.Item label="Student" value="student" />
+                  </Picker>
+                  </View>
+                  <View style={styles.productItem}>
+                    <Text>Discount</Text>
+                    <Text>P{discountValue.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.productItem}>
+                    <Text>Total</Text>
+                    <Text>P{total.toFixed(2)}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.dineInTakeOut}>
+                  <TouchableOpacity
+                    style={[styles.dineOption, dineIn ? styles.selectedOption : null]}
+                    onPress={() => setDineIn(true)}
+                  >
+                    <Text>Dine In</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.dineOption, !dineIn ? styles.selectedOption : null]}
+                    onPress={() => setDineIn(false)}
+                  >
+                    <Text>Take Out</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity style={styles.printButton} onPress={handleConfirmOrder}>
+                  <Text style={styles.printButtonText}>Print Bills</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           />
-
-        <View style={styles.productList}>
-          {order.map((item, index) => (
-            <View key={index} style={styles.productItem}>
-              <Image source={require('../../assets/images/littleorder.png')} style={styles.ordersum} />
-              <View style={styles.orderName}>
-              <Text style={styles.orderName}>{item.product.Name} </Text>
-              <Text style={styles.orderName}>{item.variation} {item.size}</Text>
-              </View>
-              
-              <Text>P{item.price * item.quantity}</Text>
-              <View style={styles.counterContainer}>
-                <TouchableOpacity onPress={() => decrementProductQuantity(item.product, item.variation, item.size)}>
-                  <Text style={styles.counterButton}>-</Text>
-                </TouchableOpacity>
-                <Text>{item.quantity}</Text>
-                <TouchableOpacity onPress={() => addProductToOrder(item.product, item.variation, item.size, item.price)}>
-                  <Text style={styles.counterButton}>+</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))}
-        </View>
-
-          <View style={styles.summaryDetails}>
-            <View style={styles.productItem}>
-              <Text>Subtotal</Text>
-              <Text>P{subtotal.toFixed(2)}</Text>
-            </View>
-            <Picker selectedValue={discount} onValueChange={setDiscount} style={styles.picker}>
-              <Picker.Item label="Select Discount" value="none" />
-              <Picker.Item label="Senior Citizen" value="senior" />
-              <Picker.Item label="PWD" value="pwd" />
-              <Picker.Item label="Student" value="student" />
-            </Picker>
-            <View style={styles.productItem}>
-              <Text>Discount</Text>
-              <Text>P{discountValue.toFixed(2)}</Text>
-            </View>
-            <View style={styles.productItem}>
-              <Text>Total</Text>
-              <Text>P{total.toFixed(2)}</Text>
-            </View>
-          </View>
-
-          <View style={styles.dineInTakeOut}>
-            <TouchableOpacity
-              style={[styles.dineOption, dineIn ? styles.selectedOption : null]}
-              onPress={() => setDineIn(true)}
-            >
-              <Text>Dine In</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.dineOption, !dineIn ? styles.selectedOption : null]}
-              onPress={() => setDineIn(false)}
-            >
-              <Text>Take Out</Text>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity style={styles.printButton} onPress={handleConfirmOrder}>
-            <Text style={styles.printButtonText}>Print Bills</Text>
-          </TouchableOpacity>
-        </ScrollView>
       </View>
     </View>
   );
@@ -646,13 +690,15 @@ const styles = StyleSheet.create({
   orderSummaryContainer: {
     backgroundColor: '#fff',
     borderRadius: 10,
-    width: '100%', // Example percentage, adjust as needed
-    maxWidth: 340, // Maximum width to ensure it doesn’t get too large
+    width: '100%', 
+    maxWidth: 340, 
     shadowColor: '#203B36',
     elevation: 10,
-    margin: 10,
-    height: "100%",
+    margin: 10, 
     alignSelf: 'center',
+  },
+  orderSummary:{
+
   },
   orderHeader: {
     flexDirection: 'row',
@@ -677,18 +723,19 @@ const styles = StyleSheet.create({
     color: '#DDB04B',
     borderRadius: 5,
     padding: 10,
-    marginBottom: 10,
+    marginBottom: 20,
     fontFamily: 'Poppins-Regular',
     shadowColor: '#203B36',
     elevation: 10,
     marginHorizontal: 12,
   },
   productList: {
-    marginBottom: 10,
+    marginBottom: -10,
     marginHorizontal: 12,
     width: '100%',
-    height: 200,
-    overflow: 'scroll'
+    height: 80,
+    minHeight: 60,
+    overflow: 'hidden',
   },
   productItem: {
     flexDirection: 'row',
@@ -703,6 +750,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Regular',
     justifyContent: 'space-between',
     marginHorizontal: 12,
+    marginTop: 20,
   },
   dineInTakeOut: {
     flexDirection: 'row',
@@ -740,11 +788,17 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Bold',
   },
   picker: {
-    marginBottom: 8,
     borderRadius: 8,
     marginHorizontal: 8,
     height: 30,
-    marginTop: 6,
+  },
+  pickerWrapper: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 5,
+    marginVertical: 10,
+    height: 55,
+    overflow: 'hidden',
   },
   cashier: {
     marginBottom: 8,
@@ -759,14 +813,14 @@ const styles = StyleSheet.create({
     marginEnd: 12,
   },
   counterButton: {
-    backgroundColor: '#006400', // A dark green color for the buttons
+    backgroundColor: '#006400', 
     color: 'white',
     fontSize: 18,
     fontWeight: 'bold',
     padding: 10,
-    borderRadius: 20, // Rounded buttons
-    marginHorizontal: 10, // Space between buttons and text
+    borderRadius: 20, 
+    marginHorizontal: 10,
     textAlign: 'center',
-    minWidth: 40, // Ensure the button has a consistent size
+    minWidth: 40, 
   }
 });

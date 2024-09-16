@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Pressable, FlatList } from 'react-native';
+import { StyleSheet, View, Pressable, FlatList, Image, TextInput } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { FontAwesome } from '@expo/vector-icons';
+import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import { Text } from '@/components/StyledText';
 
@@ -18,6 +18,7 @@ export default function TabThreeScreen() {
   const [data, setData] = useState<Transaction[]>([]);
   const [filteredData, setFilteredData] = useState<Transaction[]>([]);
   const [showPicker, setShowPicker] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const onChange = (_: any, selectedDate: Date | undefined) => {
     const currentDate = selectedDate || date;
@@ -33,6 +34,20 @@ export default function TabThreeScreen() {
   const showAllData = () => {
     setFilteredData(data); // Reset the filtered data to show all transactions
   };
+
+  useEffect(() => {
+    if (searchTerm) {
+      const lowercasedSearchTerm = searchTerm.toLowerCase();
+      const filtered = data.filter(item =>
+        item.orderNo.toLowerCase().includes(lowercasedSearchTerm) ||
+        item.cashier.toLowerCase().includes(lowercasedSearchTerm) ||
+        item.date.toLowerCase().includes(lowercasedSearchTerm)
+      );
+      setFilteredData(filtered);
+    } else {
+      setFilteredData(data); // If search term is empty, show all data
+    }
+  }, [searchTerm, data]);
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -155,22 +170,39 @@ export default function TabThreeScreen() {
     </View>
   );
 
+  
+
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Transaction History</Text>
-        <Pressable style={styles.closeButton} onPress={closeTransaction}>
-          <Text style={styles.closeButtonText}>Close Transaction</Text>
-        </Pressable>
+
+      {/* Header with logo on the left, title and search bar on the right */}
+      <View style={styles.headerContainer}>
+        <Image source={require('../../assets/images/logo.png')} style={styles.logo} />
+        <View style={styles.titleSearchContainer}>
+          <Text style={styles.pageTitle}>Transaction History</Text>
+          <View style={styles.searchBarContainer}>
+            <Ionicons name="search" size={24} color="#DDB04B" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchBar}
+              placeholder="Search history..."
+              value={searchTerm}
+              onChangeText={setSearchTerm}
+              placeholderTextColor="#DDB04B"
+            />
+          </View>
+        </View>
       </View>
 
       <View style={styles.datePickerContainer}>
         <Pressable onPress={showDatePicker} style={styles.datePickerButton}>
-          <FontAwesome name="calendar" size={20} color="#007bff" />
+          <FontAwesome name="calendar" size={20} color="#DDB04B" />
           <Text style={styles.datePickerText}>{`${date.toLocaleString('default', { month: 'long' })} ${date.getDate()} ${date.getFullYear()}`}</Text>
-        </Pressable>
+        </Pressable>    
         <Pressable onPress={showAllData} style={styles.showAllButton}>
           <Text style={styles.showAllButtonText}>Show All</Text>
+        </Pressable>  
+        <Pressable style={styles.closeButton} onPress={closeTransaction}>
+          <Text style={styles.closeButtonText}>Close Transaction</Text>
         </Pressable>
       </View>
 
@@ -215,52 +247,100 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
+  logo: {
+    width: 100,
+    height: 100,
+    resizeMode: 'contain',
+    marginRight: 20,
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+    marginRight: 0,
+  },
+  titleSearchContainer: {
+    flex: 1,
+    justifyContent: 'center',
+  },
   title: {
     fontSize: 20,
     fontWeight: 'bold',
+  },
+  pageTitle: {
+    fontSize: 26,
+    color: '#203B36',
+    fontWeight: 'bold',
+    marginBottom: 14,
+    marginTop: 20,
+    fontFamily: 'Poppins-Black',
+  },
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    borderColor: '#DDB04B',
+    width: '100%',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    backgroundColor: '#fff',
+    shadowColor: '#203B36',
+    elevation: 8,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchBar: {
+    flex: 1,
+    height: 40,
+    color: '#DDB04B',
   },
   closeButton: {
     backgroundColor: '#ff6347',
     paddingVertical: 10,
     paddingHorizontal: 15,
     borderRadius: 5,
+    marginLeft: 'auto',
   },
   closeButtonText: {
     color: 'white',
-    fontWeight: 'bold',
+    fontFamily: 'Poppins-ExtraBold'
   },
   datePickerContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 15,
   },
   datePickerButton: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 10,
     borderRadius: 5,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#203B36',
+    marginRight: 10,
   },
   datePickerText: {
     marginLeft: 10,
     fontSize: 16,
-    color: '#007bff',
+    color: 'white',
   },
   showAllButton: {
     padding: 10,
     borderRadius: 5,
-    backgroundColor: '#28a745',
+    backgroundColor: '#203B36',
+    width: 100,
+    marginRight: 10,
   },
   showAllButtonText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: 'bold',
+    alignSelf: 'center',
   },
   tableHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: '#e0e0e0',
+    backgroundColor: '#DDB04B',
     paddingVertical: 10,
     paddingHorizontal: 5,
     borderRadius: 5,
@@ -281,6 +361,7 @@ const styles = StyleSheet.create({
   },
   headerCell: {
     fontWeight: 'bold',
+    fontFamily: 'Poppins-Regular'
   },
   table: {
     marginTop: 10,
