@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
 import { View, TextInput, Button, Alert, StyleSheet, ActivityIndicator, Image, TouchableOpacity } from 'react-native';
-import axios from 'axios';
 import { Text } from '@/components/StyledText';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient'; // Import linear gradient for background effect
-import { FontAwesome } from '@expo/vector-icons'; // Import icons from Expo Vector Icons
+import { LinearGradient } from 'expo-linear-gradient';
+import { FontAwesome } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getDatabase, ref, get, child } from "firebase/database";
+import { firebase_app } from '../FirebaseConfig'
 
 const LoginScreen: React.FC = () => {
   const [staffId, setStaffId] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false); // State to toggle password visibility
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -23,41 +24,48 @@ const LoginScreen: React.FC = () => {
 
     setLoading(true);
     try {
-      const response = await axios.post('https://winzen-server-1.onrender.com/login', {
-        staff_id: staffId,
-        email: email,
-        password: password,
-      });
+      // Get the Firebase Realtime Database instance
+      const db = getDatabase(firebase_app);
+      const dbRef = ref(db);
 
-      console.log('Server Response:', response.data);
+      // Fetch the staff data from Realtime Database
+      const snapshot = await get(child(dbRef, `staffs/${staffId}`));
 
-      if (response.data.message === 'Successfully Logged In') {
-        const { token, staff } = response.data;
+      if (snapshot.exists()) {
+        const staff = snapshot.val();
 
-        // Store staff information and token
-        const staffData = {
-          id: staff.id,
-          name: staff.name,
-          email: staff.email,
-          phone: staff.phone,
-          age: staff.age,
-          birthday: staff.birthday,
-          imageUrl: staff.imageUrl,
-          role: staff.role,
-        };
+        // Check if email and password match
+        if (staff.email === email && staff.password === password) {
+          // Check for role (Admin or Cashier)
+          if (staff.role === 'Admin' || staff.role === 'Cashier') {
+            const staffData = {
+              id: staffId,
+              name: staff.name,
+              email: staff.email,
+              phone: staff.phone,
+              age: staff.age,
+              birthday: staff.birthday,
+              imageUrl: staff.imageUrl,
+              role: staff.role,
+            };
 
-        await AsyncStorage.setItem('staffInfo', JSON.stringify(staffData));
-        await AsyncStorage.setItem('token', token); // Optionally store the token
-      
-        Alert.alert('Success', 'Successfully Logged In');
-        router.replace('/(tabs)/'); // Redirect to main application
-      }      
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        Alert.alert('Login Failed', error.response?.data?.message || 'An error occurred');
+            // Store staff information in AsyncStorage
+            await AsyncStorage.setItem('staffInfo', JSON.stringify(staffData));
+
+            Alert.alert('Success', 'Successfully Logged In');
+            router.replace('/(tabs)/'); // Redirect to main application
+          } else {
+            Alert.alert('Login Failed', 'Unauthorized role.');
+          }
+        } else {
+          Alert.alert('Login Failed', 'Invalid email or password.');
+        }
       } else {
-        Alert.alert('Login Failed', 'An unexpected error occurred');
+        Alert.alert('Login Failed', 'Staff ID not found.');
       }
+    } catch (error) {
+      Alert.alert('Login Failed', 'An error occurred during login.');
+      console.error(error);
     } finally {
       setLoading(false);
     }

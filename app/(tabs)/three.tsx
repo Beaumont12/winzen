@@ -4,6 +4,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import { Text } from '@/components/StyledText';
+import { getDatabase, ref, onValue } from 'firebase/database';
+import { firebase_app } from '../../FirebaseConfig'
 
 interface Transaction {
   orderNo: string;
@@ -23,8 +25,8 @@ export default function TabThreeScreen() {
   const onChange = (_: any, selectedDate: Date | undefined) => {
     const currentDate = selectedDate || date;
     setDate(currentDate);
-    setShowPicker(false); // Hide the picker after selection
-    filterByDate(currentDate); // Filter data by selected date
+    setShowPicker(false);
+    filterByDate(currentDate);
   };
 
   const showDatePicker = () => {
@@ -45,32 +47,35 @@ export default function TabThreeScreen() {
       );
       setFilteredData(filtered);
     } else {
-      setFilteredData(data); // If search term is empty, show all data
+      setFilteredData(data);
     }
   }, [searchTerm, data]);
 
   useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const response = await fetch('https://winzen-server-1.onrender.com/history');
-        const result = await response.json();
+    const fetchHistoryFromFirebase = async () => {
+      const db = getDatabase(firebase_app);
+      const historyRef = ref(db, 'history'); // Adjust the path to match your Firebase structure
 
-        const mappedData = result.map((item: any) => ({
-          orderNo: item.orderNumber,
-          cashier: item.staffName,
-          date: formatOrderDate(item.orderDateTime), 
-          quantity: Object.keys(item.orderItems).reduce((acc, key) => acc + item.orderItems[key].quantity, 0),
-          total: `$${item.total}`,
-        }));
-
+      onValue(historyRef, (snapshot) => {
+        const result = snapshot.val();
+        const mappedData = Object.keys(result || {}).map((key) => {
+          const item = result[key];
+          return {
+            orderNo: item.orderNumber,
+            cashier: item.staffName,
+            date: formatOrderDate(item.orderDateTime),
+            quantity: Object.keys(item.orderItems).reduce((acc, key) => acc + item.orderItems[key].quantity, 0),
+            total: `$${item.total}`,
+          };
+        });
         setData(mappedData);
-        setFilteredData(mappedData); // Set the initial state to show all data
-      } catch (error) {
+        setFilteredData(mappedData);
+      }, (error) => {
         console.error('Error fetching history:', error);
-      }
+      });
     };
 
-    fetchHistory();
+    fetchHistoryFromFirebase();
   }, []);
 
   const formatOrderDate = (orderDateTime: string) => {
@@ -170,8 +175,6 @@ export default function TabThreeScreen() {
     </View>
   );
 
-  
-
   return (
     <View style={styles.container}>
 
@@ -217,7 +220,7 @@ export default function TabThreeScreen() {
       )}
 
       <View style={styles.tableHeader}>
-        <Text style={[styles.tableCell, styles.headerCell]}>Order No.</Text>
+        <Text style={[styles.tableCell, styles.headerCell]}>Order #</Text>
         <Text style={[styles.tableCell, styles.headerCell]}>Cashier</Text>
         <Text style={[styles.tableCell, styles.headerCell]}>Date</Text>
         <Text style={[styles.tableCell, styles.headerCell]}>Quantity</Text>

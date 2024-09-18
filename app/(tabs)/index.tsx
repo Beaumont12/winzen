@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { View, FlatList, TextInput, StyleSheet, Image, TouchableOpacity, Dimensions, Alert, ScrollView } from 'react-native';
+import React, { useState, useEffect, memo, useCallback, useMemo } from 'react';
+import { Platform, KeyboardAvoidingView, View, FlatList, TextInput, StyleSheet, Image, TouchableOpacity, Dimensions, Alert, ScrollView } from 'react-native';
 import axios from 'axios';
 import { Text } from '@/components/StyledText';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons'; // For search icons
+import { Ionicons, MaterialIcons } from '@expo/vector-icons'; // For search icon
 import { Picker } from '@react-native-picker/picker'; // Picker for discount selection
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getDatabase, ref, onValue, set, get  } from "firebase/database";
+import { firebase_app } from '../../FirebaseConfig'
 
 interface Size {
   [size: string]: number; // Allow indexing with string and returning a number
@@ -47,45 +49,53 @@ export default function TabOneScreen() {
   const [cashierName, setCashierName] = useState('');
 
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await axios.get('https://winzen-server-1.onrender.com/categories');
-        setCategories(response.data);
-      } catch (error) {
-        console.error('Error fetching categories:', error);
-      }
+    const db = getDatabase(firebase_app); // Get the Firebase database instance
+
+    // Fetch categories from Firebase
+    const fetchCategories = () => {
+      const categoriesRef = ref(db, 'categories');
+      onValue(categoriesRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          const categoriesArray = Object.keys(data).map((key) => ({
+            _id: key,
+            ...data[key],
+          }));
+          setCategories(categoriesArray);
+        }
+      });
     };
 
-    const fetchProducts = async () => {
-      try {
-        const response = await axios.get('https://winzen-server-1.onrender.com/products');
-        setProducts(response.data);
-      } catch (error) {
-        console.error('Error fetching products:', error);
-      }
+    // Fetch products from Firebase
+    const fetchProducts = () => {
+      const productsRef = ref(db, 'products');
+      onValue(productsRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          const productsArray = Object.keys(data).map((key) => ({
+            _id: key,
+            ...data[key],
+          }));
+          setProducts(productsArray);
+        }
+      });
     };
 
     const loadCashierInfo = async () => {
       try {
         const storedStaffInfo = await AsyncStorage.getItem('staffInfo');
-        
-        console.log('Stored Staff Info:', storedStaffInfo);
-        
         if (storedStaffInfo) {
           const staffData = JSON.parse(storedStaffInfo);
-          const { name } = staffData; 
-          setCashierName(name); 
-        } else {
-          console.log('No staff information found.');
+          setCashierName(staffData.name);
         }
       } catch (error) {
         console.error('Error loading staff info:', error);
       }
-    };    
+    };
 
     fetchCategories();
     fetchProducts();
-    loadCashierInfo(); 
+    loadCashierInfo();
   }, []);
 
   const clearOrder = () => {
@@ -97,15 +107,15 @@ export default function TabOneScreen() {
     loadOrderNumber();
   }, []);
   
-  const handleAddToOrder = (product: Product, variation: string, size: string, price: number) => {
+  const handleAddToOrder = useCallback((product: Product, variation: string, size: string, price: number) => {
     if (product.stockStatus === 'Out of Stock') {
       Alert.alert('Product not in stock');
       return;
     }
   
-    setOrder((prevOrder) => {
+    setOrder(prevOrder => {
       const existingProductIndex = prevOrder.findIndex(
-        (item) => item.product._id === product._id && item.variation === variation && item.size === size
+        item => item.product._id === product._id && item.variation === variation && item.size === size
       );
   
       if (existingProductIndex >= 0) {
@@ -118,7 +128,7 @@ export default function TabOneScreen() {
         return [...prevOrder, { product, variation, size, price, quantity: 1 }];
       }
     });
-  };  
+  }, []); 
 
   const filteredProducts = products.filter(
     (product) =>
@@ -135,39 +145,31 @@ export default function TabOneScreen() {
     return priceNumber.toFixed(2);
   };
 
-  const renderProductItem = ({ item }: { item: Product }) => {
+  const ProductItem = memo(({ item, handleAddToOrder }: { item: Product; handleAddToOrder: Function }) => {
     const hotPrices = item.Variations?.temperature?.hot || [];
     const icedPrices = item.Variations?.temperature?.iced || [];
-
+  
     const renderPrices = (prices: Size[], variation: string) => (
       <View>
         <Text style={styles.variationTitle}>{variation}</Text>
         <View style={styles.priceContainer}>
-          {prices.map((priceItem, index) => {
-            const sizeKeys = Object.keys(priceItem);
-            return sizeKeys.map((size) => {
-              const price = priceItem[size];
-              return (
-                price !== undefined && (
-                  <View key={`${item._id}-${variation}-${index}-${size}`} style={styles.priceWrapper}>
-                    <TouchableOpacity
-                      onPress={() => handleAddToOrder(item, variation, size, Number(price))}
-                      style={[styles.priceButton, item.stockStatus === 'Out of Stock' && styles.disabledButton]}
-                      disabled={item.stockStatus === 'Out of Stock'}
-                    >
-                      <MaterialIcons name="coffee" size={16} color="#FFFFFF" style={styles.cupIcon} />
-                      <Text style={styles.productPrice}>₱{handlePrice(price)}</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.sizeLabel}>{size}</Text>
-                  </View>
-                )
-              );
-            });
-          })}
+          {Object.entries(prices).map(([size, price]) => (
+            <View key={`${item._id}-${variation}-${size}`} style={styles.priceWrapper}>
+              <TouchableOpacity
+                onPress={() => handleAddToOrder(item, variation, size, Number(price))}
+                style={[styles.priceButton, item.stockStatus === 'Out of Stock' && styles.disabledButton]}
+                disabled={item.stockStatus === 'Out of Stock'}
+              >
+                <MaterialIcons name="coffee" size={16} color="#FFFFFF" style={styles.cupIcon} />
+                <Text style={styles.productPrice}>₱{handlePrice(price)}</Text>
+              </TouchableOpacity>
+              <Text style={styles.sizeLabel}>{size}</Text>
+            </View>
+          ))}
         </View>
       </View>
     );
-
+  
     return (
       <View style={styles.product}>
         <Image source={{ uri: item.imageURL }} style={styles.productImage} />
@@ -176,19 +178,27 @@ export default function TabOneScreen() {
         <Text style={[styles.stockStatus, item.stockStatus === 'In Stock' ? styles.inStock : styles.outOfStock]}>
           {item.stockStatus}
         </Text>
-        {hotPrices.length > 0 && renderPrices(hotPrices, 'Hot')}
-        {icedPrices.length > 0 && renderPrices(icedPrices, 'Iced')}
+        {Object.keys(hotPrices).length > 0 && renderPrices(hotPrices, 'Hot')}
+        {Object.keys(icedPrices).length > 0 && renderPrices(icedPrices, 'Iced')}
       </View>
     );
-  };
+  });
+  
+  const renderProductItem = ({ item }: { item: Product }) => (
+    <ProductItem item={item} handleAddToOrder={handleAddToOrder} />
+  );
 
-  const renderCategoryItem = ({ item }: { item: Category }) => (
+  const CategoryItem = memo(({ item, setSelectedCategory }: { item: Category; setSelectedCategory: Function }) => (
     <TouchableOpacity key={item._id} onPress={() => setSelectedCategory(item.Name)} style={styles.categoryButton}>
       <Text style={styles.categoryButtonText}>{item.Name}</Text>
     </TouchableOpacity>
+  ));  
+
+  const renderCategoryItem = ({ item }: { item: Category }) => (
+    <CategoryItem item={item} setSelectedCategory={setSelectedCategory} />
   );
 
-  const calculateTotals = () => {
+  const { subtotal, discountValue, total } = useMemo(() => {
     const subtotal = order.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   
     let discountValue = 0;
@@ -203,11 +213,9 @@ export default function TabOneScreen() {
     
     const total = subtotal - discountValue;
     return { subtotal, discountValue, total };
-  };     
+  }, [order, discount]);
 
-  const { subtotal, discountValue, total } = calculateTotals();
-
-  const handleConfirmOrder = () => {
+  const handleConfirmOrder = useCallback(async () => {
     if (!customerName.trim()) {
       Alert.alert('Missing Customer Name', 'Please enter the customer name before confirming the order.');
       return;
@@ -231,22 +239,22 @@ export default function TabOneScreen() {
         },
         {
           text: 'Confirm',
+          
           onPress: async () => {
+            const formatToTwoDecimalPlaces = (value: number) => value.toFixed(2);
             const newOrder: Record<string, any> = {
-              _id: orderNumber.toString(),
               CustomerName: customerName,
-              Discount: discountValue, 
-              OrderDateTime: new Date().toString(), 
-              OrderItems: {},
-              Preference: dineIn ? 'Dine In' : 'Take Out', 
-              StaffName: cashierName, 
-              Subtotal: subtotal, 
-              Total: total, 
+              Discount: formatToTwoDecimalPlaces(discountValue),
+              OrderDateTime: new Date().toString(),
+              Preference: dineIn ? 'Dine In' : 'Take Out',
+              StaffName: cashierName,
+              Subtotal: formatToTwoDecimalPlaces(subtotal),
+              Total: formatToTwoDecimalPlaces(total),
             };
   
             order.forEach((item, index) => {
-              newOrder.OrderItems[`Order_${index + 1}`] = {
-                Price: item.price,
+              newOrder[`Order_${index + 1}`] = {
+                Price: formatToTwoDecimalPlaces(item.price),
                 ProductName: item.product.Name,
                 Quantity: item.quantity,
                 Size: item.size,
@@ -257,24 +265,21 @@ export default function TabOneScreen() {
             console.log('New Order Payload:', newOrder);
   
             try {
-              const response = await axios.post('https://winzen-server-1.onrender.com/create-order', newOrder);
-              console.log('Response:', response);
+              const db = getDatabase(firebase_app); // Get the Firebase database instance
+              const ordersRef = ref(db, 'orders'); // Reference to 'orders' node in Firebase
+              const orderNumberRef = ref(db, 'orderNumber'); // Reference to 'orderNumber' node in Firebase
   
-              if (response.status === 201) { 
-                Alert.alert('Order Confirmed', 'Your order has been successfully confirmed.');
+              const currentOrderNumber = orderNumber.toString();
   
-                const newOrderNumber = orderNumber + 1;
-                setOrderNumber(newOrderNumber); 
-                saveOrderNumber(newOrderNumber);
+              await set(ref(db, `orders/${currentOrderNumber}`), newOrder);
+              const nextOrderNumber = orderNumber + 1;
+              await set(orderNumberRef, nextOrderNumber);
   
-                // Clear the order after a successful confirmation
-                clearOrder();
+              Alert.alert('Order Confirmed', 'Your order has been successfully confirmed.');
   
-              } else {
-                console.log('Response Status:', response.status);
-                console.log('Response Data:', response.data);
-                Alert.alert('Order Error', 'Failed to confirm the order.');
-              }
+              setOrderNumber(nextOrderNumber);
+              await saveOrderNumber(nextOrderNumber);
+              clearOrder();
             } catch (error) {
               Alert.alert('Error', 'An error occurred while confirming the order.');
               console.error(error);
@@ -284,8 +289,8 @@ export default function TabOneScreen() {
       ],
       { cancelable: false }
     );
-  };
-
+  }, [customerName, order, discountValue, subtotal, total, orderNumber, dineIn, cashierName]);
+  
   const saveOrderNumber = async (orderNumber: number) => {
     try {
       await AsyncStorage.setItem('orderNumber', orderNumber.toString());
@@ -296,63 +301,69 @@ export default function TabOneScreen() {
 
   const loadOrderNumber = async () => {
     try {
-      const savedOrderNumber = await AsyncStorage.getItem('orderNumber');
-      if (savedOrderNumber !== null) {
-        setOrderNumber(parseInt(savedOrderNumber, 10)); // Set the order number from storage
+      const db = getDatabase(); // Get the Firebase database instance
+      const orderNumberRef = ref(db, 'orderNumber'); // Reference to the 'orderNumber' node
+  
+      const snapshot = await get(orderNumberRef);
+      if (snapshot.exists()) {
+        const savedOrderNumber = snapshot.val();
+        setOrderNumber(parseInt(savedOrderNumber, 10)); // Set the order number from Firebase
       } else {
-        setOrderNumber(1); // Default to 1 if no order number is found
+        setOrderNumber(1);
       }
     } catch (error) {
       console.error('Error loading order number:', error);
       setOrderNumber(1); // Default to 1 if an error occurs
     }
-  };  
+  };
+  
 
-  const addProductToOrder = (product: Product, variation: string, size: string, price: number) => {
+  const addProductToOrder = useCallback((product: Product, variation: string, size: string, price: number) => {
     setOrder(prevOrder => {
-      // Check if the product with the same variation and size already exists in the order
-      const existingProductIndex = prevOrder.findIndex(item => 
+      const existingProductIndex = prevOrder.findIndex(item =>
         item.product.Name === product.Name && item.variation === variation && item.size === size
       );
-
+  
       if (existingProductIndex !== -1) {
-        // If the product exists, create a copy of the order and increment the quantity
         return prevOrder.map((item, index) =>
           index === existingProductIndex
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
       } else {
-        // Add a new product entry with initial quantity of 1
         return [...prevOrder, { product, variation, size, price, quantity: 1 }];
       }
     });
-  };
-
-  // Function to decrement product quantity
-  const decrementProductQuantity = (product: Product, variation: string, size: string) => {
+  }, []);
+  
+  const decrementProductQuantity = useCallback((product: Product, variation: string, size: string) => {
     setOrder(prevOrder => {
       const existingProductIndex = prevOrder.findIndex(item =>
         item.product.Name === product.Name && item.variation === variation && item.size === size
       );
-
+  
       if (existingProductIndex >= 0) {
         const updatedOrder = [...prevOrder];
         if (updatedOrder[existingProductIndex].quantity > 1) {
           updatedOrder[existingProductIndex].quantity -= 1;
         } else {
-          // Remove product if quantity is 0
           updatedOrder.splice(existingProductIndex, 1);
         }
         return updatedOrder;
       }
       return prevOrder;
     });
-  };
+  }, []);  
 
+  const handleCustomerNameChange = useCallback((name: string) => {
+    setCustomerName(name);
+  }, []);
+  
   return (
     <View style={styles.container}>
-      {/* Header with logo on the left, title and search bar on the right */}
+
+      <View style={styles.leftcontainer}>
+        {/* Header with logo on the left, title and search bar on the right */}
       <View style={styles.headerContainer}>
         <Image source={require('../../assets/images/logo.png')} style={styles.logo} />
         <View style={styles.titleSearchContainer}>
@@ -400,9 +411,19 @@ export default function TabOneScreen() {
           maxToRenderPerBatch={5}
           windowSize={5}
         />
-
+      </View>
+      </View>
+      
+      <View style={styles.rightcontainer}>
+        <View style={styles.orderSummaryContainer}>
+          <TextInput
+                  placeholder="Enter Customer Name"
+                  style={styles.customerNameInput}
+                  value={customerName}
+                  onChangeText={handleCustomerNameChange}
+                />
           <FlatList
-            style={styles.orderSummaryContainer}
+            keyboardShouldPersistTaps="handled"
             data={order} 
             keyExtractor={(item, index) => index.toString()}
             renderItem={({ item, index }) => (
@@ -410,8 +431,8 @@ export default function TabOneScreen() {
                 <View key={index} style={styles.productItem}>
                 <Image source={require('../../assets/images/littleorder.png')} style={styles.ordersum} />
                 <View style={styles.orderName}>
-                  <Text>{item.product.Name}</Text>
-                  <Text>{item.variation} {item.size}</Text>
+                  <Text style={styles.orderName}>{item.product.Name}</Text>
+                  <Text style={styles.orderName}>{item.variation} {item.size}</Text>
                 </View>
                 <Text>P{item.price * item.quantity}</Text>
                 <View style={styles.counterContainer}>
@@ -434,15 +455,7 @@ export default function TabOneScreen() {
                     <Text style={styles.clearAll}>Clear All</Text>
                   </TouchableOpacity>
                 </View>
-
                 <Text style={styles.cashier}>Cashier: {cashierName}</Text>
-
-                <TextInput
-                  placeholder="Enter Customer Name"
-                  style={styles.customerNameInput}
-                  value={customerName}
-                  onChangeText={setCustomerName}
-                />
               </View>
             )}
             ListFooterComponent={() => (
@@ -491,6 +504,7 @@ export default function TabOneScreen() {
               </View>
             )}
           />
+        </View> 
       </View>
     </View>
   );
@@ -501,17 +515,28 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
     backgroundColor: '#F5F7F8',
+    flexDirection: 'row'
+  },
+  leftcontainer:{
+    flex: 1,
+    flexDirection: 'column',
+  },
+  rightcontainer:{
+    flexDirection: 'column',
+    minWidth: 340,
+    width: 340,
+    paddingTop: 10,
   },
   ordersum:{
     width: 50,
-    height: '100%',
+    height: 60,
     borderRadius: 4,
     marginRight: 0,
   },
   orderName: {
     flexDirection: 'column',
-    fontSize: 12,
-    width: 60,
+    fontSize: 11,
+    width: 65,
   },
   headerContainer: {
     flexDirection: 'row',
@@ -696,9 +721,10 @@ const styles = StyleSheet.create({
     elevation: 10,
     margin: 10, 
     alignSelf: 'center',
+    height: '100%',
   },
   orderSummary:{
-
+    flex: 1
   },
   orderHeader: {
     flexDirection: 'row',
@@ -723,16 +749,17 @@ const styles = StyleSheet.create({
     color: '#DDB04B',
     borderRadius: 5,
     padding: 10,
-    marginBottom: 20,
     fontFamily: 'Poppins-Regular',
     shadowColor: '#203B36',
     elevation: 10,
     marginHorizontal: 12,
+    marginTop: 15,
   },
   productList: {
     marginBottom: -10,
     marginHorizontal: 12,
     width: '100%',
+    fontSize: 8,
     height: 80,
     minHeight: 60,
     overflow: 'hidden',
@@ -788,8 +815,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Bold',
   },
   picker: {
-    borderRadius: 8,
-    marginHorizontal: 8,
+    width: '100%',
     height: 30,
   },
   pickerWrapper: {
