@@ -104,12 +104,19 @@ export default function TabTwoScreen() {
 
                             if (newHistoryKey) {
                                 // Ensure orderItems is defined and correctly formatted
-                                const orderItems: { [key: string]: OrderItem } = Object.keys(orderData)
+                                const orderItems: { [key: string]: { price: number; productName: string; quantity: number; size: string; variation: string } } = Object.keys(orderData)
                                   .filter(key => key.startsWith('Order_'))
                                   .reduce((acc, key) => {
-                                    acc[key] = orderData[key];
+                                    const item = orderData[key] as OrderItem;
+                                    acc[key.toLowerCase()] = {
+                                      price: item.Price,
+                                      productName: item.ProductName,
+                                      quantity: item.Quantity,
+                                      size: item.Size,
+                                      variation: item.Variation,
+                                    };
                                     return acc;
-                                  }, {} as { [key: string]: OrderItem });
+                                  }, {} as { [key: string]: { price: number; productName: string; quantity: number; size: string; variation: string } });
 
                                 set(newHistoryRef, {
                                     customerName: orderData.CustomerName,

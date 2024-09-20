@@ -6,7 +6,17 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDatabase, ref, get, child } from "firebase/database";
-import { firebase_app } from '../FirebaseConfig'
+import { firebase_app } from '../FirebaseConfig';
+
+const generateToken = (length = 16): string => {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let token = '';
+  for (let i = 0; i < length; i++) {
+    const randomIndex = Math.floor(Math.random() * characters.length);
+    token += characters[randomIndex];
+  }
+  return token;
+};
 
 const LoginScreen: React.FC = () => {
   const [staffId, setStaffId] = useState('');
@@ -35,22 +45,29 @@ const LoginScreen: React.FC = () => {
         const staff = snapshot.val();
 
         // Check if email and password match
-        if (staff.email === email && staff.password === password) {
+        if (staff.Email === email && staff.Password === password) {
           // Check for role (Admin or Cashier)
-          if (staff.role === 'Admin' || staff.role === 'Cashier') {
+          if (staff.Role === 'Admin' || staff.Role === 'Cashier') {
             const staffData = {
-              id: staffId,
-              name: staff.name,
-              email: staff.email,
-              phone: staff.phone,
-              age: staff.age,
-              birthday: staff.birthday,
-              imageUrl: staff.imageUrl,
-              role: staff.role,
+              id: staffId, // Ensure staffId is defined elsewhere
+              name: staff.Name,
+              email: staff.Email,
+              phone: staff.Phone,
+              age: staff.Age,
+              birthday: {
+                Date: staff.Birthday.Date,
+                Month: staff.Birthday.Month,
+                Year: staff.Birthday.Year,
+              },
+              imageUrl: staff.ImageUrl,
+              role: staff.Role,
+              token: generateToken(),
             };
 
             // Store staff information in AsyncStorage
             await AsyncStorage.setItem('staffInfo', JSON.stringify(staffData));
+
+            console.log('staffInfo', (staffData))
 
             Alert.alert('Success', 'Successfully Logged In');
             router.replace('/(tabs)/'); // Redirect to main application

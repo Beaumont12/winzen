@@ -242,10 +242,16 @@ export default function TabOneScreen() {
           
           onPress: async () => {
             const formatToTwoDecimalPlaces = (value: number) => value.toFixed(2);
+
+            const formatDate = () => {
+              const currentDate = new Date();
+              return currentDate.toUTCString().replace('UTC', 'GMT');
+            }
+
             const newOrder: Record<string, any> = {
               CustomerName: customerName,
               Discount: formatToTwoDecimalPlaces(discountValue),
-              OrderDateTime: new Date().toString(),
+              OrderDateTime: formatDate(),
               Preference: dineIn ? 'Dine In' : 'Take Out',
               StaffName: cashierName,
               Subtotal: formatToTwoDecimalPlaces(subtotal),
