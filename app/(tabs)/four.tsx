@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { StyleSheet, Pressable, Image, Alert, ScrollView, ImageBackground, TextInput, TouchableOpacity } from 'react-native';
+import { FlatList, Linking, StyleSheet, Pressable, Image, Alert, ScrollView, ImageBackground, TextInput, TouchableOpacity } from 'react-native';
 import * as ImagePicker from 'expo-image-picker'; // Image picker for selecting an image
 import { getStorage, ref, uploadBytes, getDownloadURL, } from 'firebase/storage'; // Firebase storage methods
 import { Ionicons } from '@expo/vector-icons'; // Icon library for edit
@@ -201,6 +201,30 @@ export default function TabFourScreen() {
       setImagePicked(true); // Mark that an image has been updated
     }
   };
+
+  const developers = [
+    {
+      name: "Relgin Paloma",
+      role: "Lead Developer",
+      linkedin: "https://www.linkedin.com/in/imrelgin/",
+      github: 'https://github.com/Beaumont12',
+      image: require('@/assets/images/dev1.png'), // Developer image
+    },
+    {
+      name: "Sheena Basiga",
+      role: "Project Manager",
+      linkedin: "https://www.linkedin.com/in/sheena-mechaela-basiga-a31336296/",
+      github: 'https://github.com/sheenabasiga',
+      image: require('@/assets/images/dev3.jpg'),
+    },
+    {
+      name: "Flynn Rigonan",
+      role: "UI/UX Designer",
+      linkedin: "https://www.linkedin.com/in/flynn-y-rigonan-3515542a8/",
+      github: 'https://github.com/06flynn',
+      image: require('@/assets/images/dev2.png'),
+    },
+  ];
 
   const renderSectionContent = () => {
     switch (selectedSection) {
@@ -410,10 +434,37 @@ export default function TabFourScreen() {
         );
       case 'Developers':
         return (
-          <View>
-            <Text style={styles.sectionTitle}>Developers</Text>
-            <Text style={styles.detailText}>Developed by Relgin Paloma and team.</Text>
+          <View style={styles.profcontainer3}>
+            <Text style={styles.sectionTitle2}>Winzen App Developers</Text>
+            <FlatList
+            contentContainerStyle={styles.scrollContainer}
+            data={developers}
+            renderItem={({ item }) => (
+              <View style={styles.polaroid}>
+                <Image source={item.image} style={styles.profileImage3} />
+                <View style={styles.detailsContainer}>
+                  <Text style={styles.nameText}>{item.name}</Text>
+                  <Text style={styles.roleText}>{item.role}</Text>
+                  <View style={styles.iconContainer}>
+                    <TouchableOpacity onPress={() => Linking.openURL(item.linkedin)}>
+                      <Ionicons name="logo-linkedin" size={24} color="#0077B5" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => Linking.openURL(item.github)}>
+                      <Ionicons name="logo-github" size={24} color="#0077B5" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            )}
+            keyExtractor={(item) => item.name}
+            numColumns={3} // Set number of columns to 3
+          />
+          <View style={styles.footerContainer}>
+            <Text style={styles.footerText}>
+              We are grateful to our talented developers who brought Winzen's Cafe app to life. A big thank you to our talented developers for their hard work and dedication. If you have any questions or want to collaborate, feel free to reach out to them on LinkedIn or GitHub!
+            </Text>
           </View>
+          </View> 
         );
       default:
         return null;
@@ -782,11 +833,76 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#203B36',
-    marginBottom: 20,
+    marginBottom:20,
   },
   detailText2: {
     fontSize: 16,
     marginTop: 20,
     textAlign: 'justify',
+  },
+  profcontainer3: {
+    padding: 20,
+    backgroundColor: '#f9f9f9',
+  },
+  sectionTitle3: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#203B36',
+    marginBottom:20,
+  },
+  polaroid: {
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 10,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    alignItems: 'center',
+    margin: 10, 
+    flex: 1, 
+    maxWidth: '30%', 
+    borderColor: '#DDB04B',
+    borderWidth: 1,
+  },
+  profileImage3: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: 10,
+    borderColor: '#DDB04B',
+    borderWidth: 1,
+  },
+  detailsContainer: {
+    alignItems: 'center',
+  },
+  nameText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#203B36',
+  },
+  roleText: {
+    fontSize: 16,
+    color: '#555555',
+  },
+  iconContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 5,
+  },
+  footerContainer: {
+    marginTop: 10,
+    padding: 10,
+    alignItems: 'center',
+    backgroundColor: '#f9f9f9',
+  },
+  footerText: {
+    fontSize: 16,
+    color: '#555555',
+    textAlign: 'center',
   },
 });
