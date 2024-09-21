@@ -1,15 +1,34 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Button, StyleSheet, Pressable, Image, Alert, ScrollView, ImageBackground, TextInput, TouchableOpacity } from 'react-native';
+import { StyleSheet, Pressable, Image, Alert, ScrollView, ImageBackground, TextInput, TouchableOpacity } from 'react-native';
 import * as ImagePicker from 'expo-image-picker'; // Image picker for selecting an image
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage'; // Firebase storage methods
+import { getStorage, ref, uploadBytes, getDownloadURL, } from 'firebase/storage'; // Firebase storage methods
 import { Ionicons } from '@expo/vector-icons'; // Icon library for edit
 import { View } from '@/components/Themed';
 import { FontAwesome5, FontAwesome } from '@expo/vector-icons';
 import { Text } from '@/components/StyledText';
+import { getDatabase, set, ref as dbRef } from 'firebase/database';
+import { firebase_app } from '../../FirebaseConfig';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+interface StaffInfo {
+  id: string;
+  email: string;
+  phone: string;
+  age: string;
+  birthday: {
+    Date: string;
+    Month: string;
+    Year: string;
+  };
+  imageUrl: string | null;
+  role: string;
+  name: string;
+  password: string;
+}
+
 export default function TabFourScreen() {
+  const [imagePicked, setImagePicked] = useState(false);
   const router = useRouter();
   const [staffInfo, setStaffInfo] = useState<any>(null);
   const [selectedSection, setSelectedSection] = useState('AccountInfo');
@@ -18,9 +37,11 @@ export default function TabFourScreen() {
     email: '',
     phone: '',
     age: '',
-    birthday: { Date: '', Month: '', Year: '' }
+    birthday: { Date: '', Month: '', Year: '' },
+    password: '',
   });
   const [image, setImage] = useState<string | null>(null);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
   // Load staff info from AsyncStorage
   useEffect(() => {
@@ -29,7 +50,6 @@ export default function TabFourScreen() {
         const staffData = await AsyncStorage.getItem('staffInfo');
         if (staffData !== null) {
           const staff = JSON.parse(staffData);
-          console.log('staffs', (staff))
           setStaffInfo(staff);
           setEditedInfo({
             email: staff.email,
@@ -40,6 +60,7 @@ export default function TabFourScreen() {
               Month: staff.birthday.Month.toString(),
               Year: staff.birthday.Year.toString(),
             },
+            password: staff.password,
           });
           setImage(staff.imageUrl || null);
         }
@@ -50,35 +71,104 @@ export default function TabFourScreen() {
     loadStaffInfo();
   }, []);
 
+  // Handle logout
   const handleLogout = async () => {
     try {
-      // Remove staff information from AsyncStorage
       await AsyncStorage.removeItem('staffInfo');
       Alert.alert('Success', 'Successfully Logged Out');
-      router.replace('/login'); // Redirect to the login screen after logging out
+      router.replace('/login'); // Redirect to the login screen
     } catch (error) {
       console.error('Error during logout:', error);
     }
   };
 
+  // Toggle editing mode
   const toggleEdit = () => {
     if (isEditing) {
-      onUpdateStaffInfo({ ...staffInfo, ...editedInfo });
-    }
-    setIsEditing(!isEditing);
-  };
-
-  // Function to update staff info
-  const onUpdateStaffInfo = async (updatedInfo: any) => {
-    try {
-      await AsyncStorage.setItem('staffInfo', JSON.stringify(updatedInfo));
-      setStaffInfo(updatedInfo);
-      Alert.alert('Success', 'Profile updated successfully');
-    } catch (error) {
-      console.error('Error updating staff info:', error);
+      confirmEdit(); // Call confirmEdit when saving
+    } else {
+      setIsEditing(true); // Enable editing mode
     }
   };
 
+  // Confirm and save edited profile
+  const confirmEdit = () => {
+    Alert.alert(
+      'Confirm Edit',
+      'Are you sure you want to update your profile?',
+      [
+        {
+          text: 'Cancel',
+          onPress: () => console.log('Edit canceled'),
+          style: 'cancel',
+        },
+        {
+          text: 'Confirm',
+          onPress: async () => {
+            try {
+              // Prevent further submissions while processing
+              setIsEditing(false); // Disable editing mode temporarily
+  
+              if (imagePicked) {
+                await uploadImage(); // Upload image if picked
+              }
+  
+              // Ensure that staffInfo.id is valid
+              if (!staffInfo?.id) {
+                console.error("Error: staffId is undefined");
+                return; // Exit if staffId is undefined
+              }
+  
+              // Prepare data to send to Firebase
+              const dataToSend = {
+                Email: editedInfo.email,
+                Phone: editedInfo.phone,
+                Age: Number(editedInfo.age), // Convert age to a number
+                Birthday: {
+                  Date: Number(editedInfo.birthday.Date), // Convert Date to a number
+                  Month: Number(editedInfo.birthday.Month), // Convert Month to a number
+                  Year: Number(editedInfo.birthday.Year), // Convert Year to a number
+                },
+                ImageUrl: image || staffInfo.imageUrl, // Use new image if available
+                Role: staffInfo.role, // Keep the existing role
+                Name: staffInfo.name, // Keep the existing name
+                Password: staffInfo.password,
+              };
+  
+              // Log the data being sent to the database
+              console.log('Data being sent to DB:', dataToSend);
+  
+              // Update staff information in Firebase Realtime DB
+              const db = getDatabase(firebase_app);
+              const staffRef = dbRef(db, `staffs/${staffInfo.id}`); // Use staffId correctly
+              await set(staffRef, dataToSend);
+  
+              // Update local staffInfo with new values
+              setStaffInfo((prev: StaffInfo | null) => 
+                prev ? {
+                  ...prev,
+                  email: editedInfo.email,
+                  phone: editedInfo.phone,
+                  age: editedInfo.age,
+                  birthday: editedInfo.birthday,
+                  imageUrl: image || staffInfo.imageUrl,
+                } : null
+              );
+
+              Alert.alert('Success', 'Profile updated successfully');
+            } catch (error) {
+              console.error('Error updating profile:', error);
+              Alert.alert('Error', 'Failed to update profile');
+            } finally {
+              // Re-enable editing mode
+              setIsEditing(true);
+            }
+          },
+        },
+      ]
+    );
+  };  
+  
   // Function to handle image upload
   const uploadImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -89,12 +179,18 @@ export default function TabFourScreen() {
     });
 
     if (!result.canceled && result.assets) {
-      const storage = getStorage();
+      const storage = getStorage(firebase_app);
       const response = await fetch(result.assets[0].uri);
       const blob = await response.blob();
 
+      // Ensure that staffInfo.name is not undefined
+      if (!staffInfo.name) {
+        console.error("Error: staff name is undefined");
+        return; // Exit if staffInfo.name is undefined
+      }
+
       // File path in Firebase Storage
-      const storageRef = ref(storage, `images/${staffInfo.name}.jpg`);
+      const storageRef = ref(storage, `images/${staffInfo.name}.png`); // Ensure staffInfo.name is used correctly
 
       // Upload file
       await uploadBytes(storageRef, blob);
@@ -102,7 +198,7 @@ export default function TabFourScreen() {
 
       // Update the image state and staff info with the new image URL
       setImage(downloadURL);
-      onUpdateStaffInfo({ ...staffInfo, profileImage: downloadURL });
+      setImagePicked(true); // Mark that an image has been updated
     }
   };
 
@@ -110,36 +206,39 @@ export default function TabFourScreen() {
     switch (selectedSection) {
       case 'AccountInfo':
         return (
-          <View style={styles.profcontainer}>
-            <Text style={styles.sectionTitle}>Account Information</Text>
-            <View style={styles.card1}>
-            <TouchableOpacity onPress={isEditing ? uploadImage : () => {}} disabled={!isEditing}>
-              <Image
-                source={image ? { uri: image } : require('@/assets/images/logo.png')}
-                style={styles.profileImage1}
-              />
-              <Ionicons name="camera" size={24} color={isEditing ? "#203B36" : "lightgray"} style={styles.cameraIcon} />
-            </TouchableOpacity>
-            <View style={styles.card2}>
-              <View style={styles.iconTextWrapper}>
-                <Ionicons name="person-outline" size={24} color="white" style={styles.iconTextStyle} />
-                <Text style={styles.detailtext}>{staffInfo.name.toUpperCase()}</Text>
+          <ScrollView contentContainerStyle={styles.scrollContainer}>
+            <View style={styles.profcontainer}>
+              <Text style={styles.sectionTitle}>Account Information</Text>
+
+              <View style={styles.card1}>
+                <TouchableOpacity onPress={isEditing ? uploadImage : () => {}} disabled={!isEditing}>
+                  <Image
+                    source={image ? { uri: image } : require('@/assets/images/logo.png')}
+                    style={styles.profileImage1}
+                  />
+                  <Ionicons name="camera" size={24} color={isEditing ? "#203B36" : "lightgray"} style={styles.cameraIcon} />
+                </TouchableOpacity>
+
+                <View style={styles.card2}>
+                  <View style={styles.iconTextWrapper}>
+                    <Ionicons name="person-outline" size={24} color="white" style={styles.iconTextStyle} />
+                    <Text style={styles.detailtext}>{staffInfo.name.toUpperCase()}</Text>
+                  </View>
+
+                  <View style={styles.iconTextWrapper}>
+                    <Ionicons name="id-card-outline" size={24} color="white" style={styles.iconTextStyle} />
+                    <Text style={styles.detailtext}>{staffInfo.id.toUpperCase()}</Text>
+                  </View>
+
+                  <View style={styles.iconTextWrapper}>
+                    <Ionicons name="briefcase-outline" size={24} color="white" style={styles.iconTextStyle} />
+                    <Text style={styles.detailtext}>{staffInfo.role.toUpperCase()}</Text>
+                  </View>
+                </View>
               </View>
 
-              <View style={styles.iconTextWrapper}>
-                <Ionicons name="id-card-outline" size={24} color="white" style={styles.iconTextStyle} />
-                <Text style={styles.detailtext}>{staffInfo.id.toUpperCase()}</Text>
-              </View>
-
-              <View style={styles.iconTextWrapper}>
-                <Ionicons name="briefcase-outline" size={24} color="white" style={styles.iconTextStyle} />
-                <Text style={styles.detailtext}>{staffInfo.role.toUpperCase()}</Text>
-              </View>
-            </View>
-            </View>
-    
-            {/* Editable fields */}
-            <View style={styles.inputWithIcon}>
+              {/* Editable fields */}
+              <View style={styles.inputWithIcon}>
                 <Ionicons name="mail-outline" size={24} color="gray" style={styles.iconStyle} />
                 <TextInput
                   style={[styles.input, !isEditing && styles.disabledInput]}
@@ -172,6 +271,26 @@ export default function TabFourScreen() {
                   placeholder="Age"
                   keyboardType="numeric"
                 />
+              </View>
+
+              <View style={styles.inputWithIcon}>
+                <Ionicons name="lock-closed-outline" size={24} color="gray" style={styles.iconStyle} />
+                <TextInput
+                  style={[styles.input, !isEditing && styles.disabledInput]}
+                  editable={isEditing}
+                  value={editedInfo.password}
+                  onChangeText={(text) => setEditedInfo({ ...editedInfo, password: text })}
+                  placeholder="Password"
+                  secureTextEntry={!isPasswordVisible} // Toggle password visibility
+                />
+                <TouchableOpacity onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
+                  <Ionicons
+                    name={isPasswordVisible ? "eye-outline" : "eye-off-outline"}
+                    size={24}
+                    color="gray"
+                    style={styles.iconStyle}
+                  />
+                </TouchableOpacity>
               </View>
 
               <View style={styles.birthdayContainer}>
@@ -222,39 +341,72 @@ export default function TabFourScreen() {
                     keyboardType="numeric"
                   />
                 </View>
-            </View>
+              </View>
 
-            <View style={styles.buttonContainer}>
-              <Pressable style={styles.buttonedit} onPress={toggleEdit}>
-                <Text style={styles.editButtonText}>{isEditing ? 'SAVE ACCOUNT INFORMATION' : 'EDIT ACCOUNT INFORMATION'}</Text>
-              </Pressable>
-              
-              {isEditing && ( // Only show cancel button when editing
-                <Pressable style={styles.cancelButton} onPress={() => {
-                  setIsEditing(false);
-                  setEditedInfo({
-                    email: staffInfo.email,
-                    phone: staffInfo.phone.toString(),
-                    age: staffInfo.age.toString(),
-                    birthday: {
-                      Date: staffInfo.birthday.Date.toString(),
-                      Month: staffInfo.birthday.Month.toString(),
-                      Year: staffInfo.birthday.Year.toString(),
-                    },
-                  });
-                }}>
-                  <Text style={styles.cancelButtonText}>CANCEL</Text>
+              <View style={styles.buttonContainer}>
+                <Pressable 
+                  style={styles.buttonedit} 
+                  onPress={isEditing ? confirmEdit : toggleEdit}
+                >
+                  <Text style={styles.editButtonText}>
+                    {isEditing ? 'SAVE ACCOUNT INFORMATION' : 'EDIT ACCOUNT INFORMATION'}
+                  </Text>
                 </Pressable>
-              )}
+                
+                {isEditing && (
+                  <Pressable 
+                    style={styles.cancelButton} 
+                    onPress={() => {
+                      setIsEditing(false);
+                      setEditedInfo({
+                        email: staffInfo.email,
+                        phone: staffInfo.phone.toString(),
+                        age: staffInfo.age.toString(),
+                        birthday: {
+                          Date: staffInfo.birthday.Date.toString(),
+                          Month: staffInfo.birthday.Month.toString(),
+                          Year: staffInfo.birthday.Year.toString(),
+                        },
+                        password: staffInfo.password,
+                      });
+                    }}
+                  >
+                    <Text style={styles.cancelButtonText}>CANCEL</Text>
+                  </Pressable>
+                )}
+              </View>
             </View>
-          </View>
+          </ScrollView>
         );
       case 'About':
         return (
-          <View>
-            <Text style={styles.sectionTitle}>About</Text>
-            <Text style={styles.detailText}>This app is designed to manage POS systems for businesses.</Text>
-          </View>
+          <ScrollView contentContainerStyle={styles.scrollContainer}>
+            <View style={styles.profcontainer}>
+              <Text style={styles.sectionTitle2}>About</Text>
+              <View style={styles.imageWrapper}>
+                <ImageBackground 
+                  source={require('../../assets/images/page1.jpg')} // Replace with your background image
+                  style={styles.background} // Ensure this style covers the entire screen
+                  resizeMode="cover" // Make sure the image scales properly
+                >
+                  <View style={styles.headerAbout}>
+                    <Image source={require('../../assets/images/logo.png')} style={styles.logo} />
+                    <Text style={styles.pageTitle}>Winzen's Cafe History</Text>
+                  </View>
+                </ImageBackground>
+              </View>
+              
+              <Text style={styles.detailText2}>It humbly began with an idea of establishing a warehouse,
+                given that the place is really spacious. Later on, the owner
+                thought of making it a coffee shop. Being a businessman,
+                many of his associates had a penchant for coffee, and since
+                his family also shared a love for it, he saw the opportunity to
+                create his own coffee establishment.</Text>
+              <Text style={styles.detailText2}>
+              “If you are a coffee lover who has been drinking coffee in Cebu City unya mahal, pero og makatilaw mo sa among coffee diri, maka-ingon gyud mo nga equally at par ra gyud ang quality but mas affordable ang among coffee diri,” says Wince. (If you are a coffee lover who has been drinking coffee in Cebu City that are expensive, and if you have tried our coffee here, you would say that quality is equally at par yet it’s so affordable.)
+              </Text>
+            </View>
+          </ScrollView>
         );
       case 'Developers':
         return (
@@ -337,6 +489,10 @@ export default function TabFourScreen() {
 }
 
 const styles = StyleSheet.create({
+  scrollContainer: {
+    padding: 20,
+    backgroundColor: '#f9f9f9', // Or whatever color suits the design
+  },
   container: {
     flex: 1,
     backgroundColor: '#f9f9f9',
@@ -561,6 +717,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between', // Space between buttons
     marginTop: 20,
     marginHorizontal: 20,
+    marginBottom: 40,
   },
   buttonedit: {
     flex: 1,
@@ -582,5 +739,54 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     color: '#FFFFFF', // Change as needed
+  },
+  background: {
+    flex: 1,  // Ensures the background covers the entire screen
+    justifyContent: 'center', // Aligns the content
+    alignItems: 'center',
+    resizeMode: 'cover',
+    borderRadius: 8,
+  },
+  logo: {
+    width: 100,
+    height: 100,
+    resizeMode: 'contain',
+    marginRight: 10,
+  },
+  headerAbout: {
+    flexDirection: 'row',
+    alignContent: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 60,
+    borderColor: '#DDB04B',
+    borderWidth: 2,
+  },
+  pageTitle: {
+    textAlign: 'center',
+    alignSelf: 'center',
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#DDB04B',
+    marginBottom: 10,
+    marginRight: 5,
+  },
+  imageWrapper: {
+    width: '100%', 
+    height: 121, 
+    borderRadius: 10, 
+    overflow: 'hidden',
+  },
+  sectionTitle2: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#203B36',
+    marginBottom: 20,
+  },
+  detailText2: {
+    fontSize: 16,
+    marginTop: 20,
+    textAlign: 'justify',
   },
 });

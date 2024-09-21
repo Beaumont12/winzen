@@ -61,6 +61,7 @@ const LoginScreen: React.FC = () => {
               },
               imageUrl: staff.ImageUrl,
               role: staff.Role,
+              password: staff.Password,
               token: generateToken(),
             };
 

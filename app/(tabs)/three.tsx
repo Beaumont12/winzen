@@ -5,7 +5,7 @@ import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import { Text } from '@/components/StyledText';
 import { getDatabase, ref, onValue } from 'firebase/database';
-import { firebase_app } from '../../FirebaseConfig'
+import { firebase_app } from '../../FirebaseConfig';
 
 interface Transaction {
   orderNo: string;
