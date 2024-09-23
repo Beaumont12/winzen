@@ -245,8 +245,19 @@ export default function TabOneScreen() {
 
             const formatDate = () => {
               const currentDate = new Date();
-              return currentDate.toUTCString().replace('UTC', 'GMT');
-            }
+              const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+              const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  
+              const dayName = days[currentDate.getUTCDay()];
+              const monthName = months[currentDate.getUTCMonth()];
+              const day = currentDate.getUTCDate();
+              const year = currentDate.getUTCFullYear();
+              const hours = String(currentDate.getUTCHours()).padStart(2, '0');
+              const minutes = String(currentDate.getUTCMinutes()).padStart(2, '0');
+              const seconds = String(currentDate.getUTCSeconds()).padStart(2, '0');
+  
+              return `${dayName} ${monthName} ${day} ${hours}:${minutes}:${seconds} GMT ${year}`;
+            };1  
 
             const newOrder: Record<string, any> = {
               CustomerName: customerName,

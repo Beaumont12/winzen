@@ -228,7 +228,7 @@ export default function TabThreeScreen() {
       </View>
 
       <FlatList
-        data={filteredData}
+        data={[...filteredData].reverse()}
         renderItem={renderRow}
         keyExtractor={(item) => item.orderNo}
         style={styles.table}
