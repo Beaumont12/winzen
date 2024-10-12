@@ -1,38 +1,27 @@
 import React, { useState, useEffect, memo, useCallback, useMemo } from 'react';
 import { Platform, KeyboardAvoidingView, View, FlatList, TextInput, StyleSheet, Image, TouchableOpacity, Dimensions, Alert, ScrollView } from 'react-native';
-import axios from 'axios';
 import { Text } from '@/components/StyledText';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons'; // For search icon
-import { Picker } from '@react-native-picker/picker'; // Picker for discount selection
+import { Ionicons, MaterialIcons } from '@expo/vector-icons'; 
+import { Picker } from '@react-native-picker/picker'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getDatabase, ref, onValue, set, get  } from "firebase/database";
-import { firebase_app } from '../../FirebaseConfig'
+import { getDatabase, ref, onValue, set, get, push } from "firebase/database";
+import { firebase_app } from '../../FirebaseConfig';
+import { useRouter } from 'expo-router';
+import styles from '../styles/styles'
 
-interface Size {
-  [size: string]: number; // Allow indexing with string and returning a number
-}
+interface Size { [size: string]: number;}
 
 interface Variation {
-  temperature: {
-    hot: Size[];
-    iced: Size[];
+  price?: string; 
+  temperature?: {
+    hot?: Size; 
+    iced?: Size; 
   };
 }
 
-interface Product {
-  _id: string;
-  Category: string;
-  Description: string;
-  Name: string;
-  Variations: Variation;
-  imageURL: string;
-  stockStatus: string;
-}
+interface Product { _id: string; Category: string; Description: string; Name: string; Variations: Variation; imageURL: string; stockStatus: string; }
 
-interface Category {
-  _id: string;
-  Name: string;
-}
+interface Category { _id: string; Name: string; }
 
 const { width } = Dimensions.get('window');
 
@@ -47,142 +36,114 @@ export default function TabOneScreen() {
   const [dineIn, setDineIn] = useState(true);
   const [orderNumber, setOrderNumber] = useState(1);
   const [cashierName, setCashierName] = useState('');
+  const router = useRouter();
 
   useEffect(() => {
-    const db = getDatabase(firebase_app); // Get the Firebase database instance
+    const db = getDatabase(firebase_app); 
 
-    // Fetch categories from Firebase
     const fetchCategories = () => {
       const categoriesRef = ref(db, 'categories');
       onValue(categoriesRef, (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-          const categoriesArray = Object.keys(data).map((key) => ({
-            _id: key,
-            ...data[key],
-          }));
-          setCategories(categoriesArray);
-        }
-      });
-    };
+        const data = snapshot.val(); if (data) { const categoriesArray = Object.keys(data).map((key) => ({ _id: key, ...data[key], }));
+          setCategories(categoriesArray); } }); };
 
-    // Fetch products from Firebase
     const fetchProducts = () => {
       const productsRef = ref(db, 'products');
       onValue(productsRef, (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-          const productsArray = Object.keys(data).map((key) => ({
-            _id: key,
-            ...data[key],
-          }));
-          setProducts(productsArray);
-        }
-      });
-    };
+        const data = snapshot.val(); if (data) { const productsArray = Object.keys(data).map((key) => ({ _id: key, ...data[key], }));
+          setProducts(productsArray); } }); };
 
     const loadCashierInfo = async () => {
       try {
         const storedStaffInfo = await AsyncStorage.getItem('staffInfo');
-        if (storedStaffInfo) {
-          const staffData = JSON.parse(storedStaffInfo);
-          setCashierName(staffData.name);
-        }
-      } catch (error) {
-        console.error('Error loading staff info:', error);
-      }
-    };
+        if (storedStaffInfo) { const staffData = JSON.parse(storedStaffInfo);
+          if (staffData.name) { setCashierName(staffData.name);
+          } else { await AsyncStorage.removeItem('staffInfo'); router.replace('/login'); }
+        } else { router.replace('/login'); }
+      } catch (error) { console.error('Error loading staff info:', error); router.replace('/login'); } };
+    fetchCategories(); fetchProducts(); loadCashierInfo(); }, []);
 
-    fetchCategories();
-    fetchProducts();
-    loadCashierInfo();
-  }, []);
+  const clearOrder = () => { setOrder([]); setCustomerName(''); };
 
-  const clearOrder = () => {
-    setOrder([]);
-    setCustomerName('');
-  };
-
-  useEffect(() => {
-    loadOrderNumber();
-  }, []);
+  useEffect(() => { loadOrderNumber(); }, []);
   
   const handleAddToOrder = useCallback((product: Product, variation: string, size: string, price: number) => {
-    if (product.stockStatus === 'Out of Stock') {
-      Alert.alert('Product not in stock');
-      return;
-    }
+    if (product.stockStatus === 'Out of Stock') { Alert.alert('Product not in stock'); return; }
   
     setOrder(prevOrder => {
-      const existingProductIndex = prevOrder.findIndex(
-        item => item.product._id === product._id && item.variation === variation && item.size === size
-      );
+      const existingProductIndex = prevOrder.findIndex( item => item.product._id === product._id && item.variation === variation && item.size === size );
   
-      if (existingProductIndex >= 0) {
-        return prevOrder.map((item, index) =>
-          index === existingProductIndex
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        );
-      } else {
-        return [...prevOrder, { product, variation, size, price, quantity: 1 }];
-      }
-    });
-  }, []); 
+      if (existingProductIndex >= 0) { return prevOrder.map((item, index) => index === existingProductIndex ? { ...item, quantity: item.quantity + 1 } : item );
+      } else { return [...prevOrder, { product, variation, size, price, quantity: 1 }]; } }); }, []); 
 
-  const filteredProducts = products.filter(
-    (product) =>
-      (!selectedCategory || product.Category === selectedCategory) &&
-      product.Name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredProducts = products.filter( (product) => (!selectedCategory || product.Category === selectedCategory) && product.Name.toLowerCase().includes(searchTerm.toLowerCase()) );
 
   const handlePrice = (price: any) => {
     const priceNumber = Number(price);
-    if (isNaN(priceNumber)) {
-      console.warn('Invalid price:', price);
-      return 'N/A';
-    }
-    return priceNumber.toFixed(2);
-  };
+    if (isNaN(priceNumber)) { console.warn('Invalid price:', price); return 'N/A'; } return priceNumber.toFixed(2); };
 
-  const ProductItem = memo(({ item, handleAddToOrder }: { item: Product; handleAddToOrder: Function }) => {
-    const hotPrices = item.Variations?.temperature?.hot || [];
-    const icedPrices = item.Variations?.temperature?.iced || [];
-  
-    const renderPrices = (prices: Size[], variation: string) => (
-      <View>
-        <Text style={styles.variationTitle}>{variation}</Text>
-        <View style={styles.priceContainer}>
-          {Object.entries(prices).map(([size, price]) => (
-            <View key={`${item._id}-${variation}-${size}`} style={styles.priceWrapper}>
-              <TouchableOpacity
-                onPress={() => handleAddToOrder(item, variation, size, Number(price))}
-                style={[styles.priceButton, item.stockStatus === 'Out of Stock' && styles.disabledButton]}
-                disabled={item.stockStatus === 'Out of Stock'}
-              >
-                <MaterialIcons name="coffee" size={16} color="#FFFFFF" style={styles.cupIcon} />
-                <Text style={styles.productPrice}>₱{handlePrice(price)}</Text>
-              </TouchableOpacity>
-              <Text style={styles.sizeLabel}>{size}</Text>
-            </View>
-          ))}
+    const ProductItem = memo(({ item, handleAddToOrder }: { item: Product; handleAddToOrder: (item: Product, variation: string, size: string, price: number) => void }) => {
+      const hotPrices = item.Variations?.temperature?.hot || {};
+      const icedPrices = item.Variations?.temperature?.iced || {};
+      const basePrice = item.Variations?.price ? { Standard: Number(item.Variations.price) } : {};
+    
+      // Function to render prices for each size under a variation
+      const renderPrices = (prices: Size, variation: string) => (
+        <View>
+          <Text style={styles.variationTitle}>{variation}</Text>
+          <View style={styles.priceContainer}>
+            {Object.entries(prices).map(([size, price]) => (
+              <View key={`${item._id}-${variation}-${size}`} style={styles.priceWrapper}>
+                <TouchableOpacity
+                  onPress={() => handleAddToOrder(item, variation, size, Number(price))}
+                  style={[styles.priceButton, item.stockStatus === 'Out of Stock' && styles.disabledButton]}
+                  disabled={item.stockStatus === 'Out of Stock'}>
+                  <MaterialIcons name="coffee" size={16} color="#FFFFFF" style={styles.cupIcon} />
+                  <Text style={styles.productPrice}>₱{handlePrice(price)}</Text>
+                </TouchableOpacity>
+                <Text style={styles.sizeLabel}>{size}</Text>
+              </View>
+            ))}
+          </View>
         </View>
-      </View>
-    );
-  
-    return (
-      <View style={styles.product}>
-        <Image source={{ uri: item.imageURL }} style={styles.productImage} />
-        <Text style={styles.productName}>{item.Name || 'No Name'}</Text>
-        <Text style={styles.productCategory}>{item.Category}</Text>
-        <Text style={[styles.stockStatus, item.stockStatus === 'In Stock' ? styles.inStock : styles.outOfStock]}>
-          {item.stockStatus}
-        </Text>
-        {Object.keys(hotPrices).length > 0 && renderPrices(hotPrices, 'Hot')}
-        {Object.keys(icedPrices).length > 0 && renderPrices(icedPrices, 'Iced')}
-      </View>
-    );
-  });
+      );
+    
+      return (
+        <View style={styles.product}>
+          <Image source={{ uri: item.imageURL }} style={styles.productImage} />
+          <Text style={styles.productName}>{item.Name || 'No Name'}</Text>
+          <Text style={styles.productCategory}>{item.Category}</Text>
+          <Text style={[styles.stockStatus, item.stockStatus === 'In Stock' ? styles.inStock : styles.outOfStock]}>
+            {item.stockStatus}
+          </Text>
+    
+          {/* Render hot variation prices if available */}
+          {Object.keys(hotPrices).length > 0 && renderPrices(hotPrices, 'Hot')}
+    
+          {/* Render iced variation prices if available */}
+          {Object.keys(icedPrices).length > 0 && renderPrices(icedPrices, 'Iced')}
+    
+          {/* Render base price if the product doesn't have temperature variations */}
+          {Object.keys(basePrice).length > 0 && (
+            <View>
+              <Text style={styles.variationTitle}>Price</Text>
+              <View style={styles.priceContainer}>
+                <View style={styles.priceWrapper}>
+                  <TouchableOpacity
+                    onPress={() => handleAddToOrder(item, 'Standard', '', Number(basePrice.Standard))}
+                    style={[styles.priceButton, item.stockStatus === 'Out of Stock' && styles.disabledButton]}
+                    disabled={item.stockStatus === 'Out of Stock'}>
+                    <MaterialIcons name="local-dining" size={16} color="#FFFFFF" style={styles.cupIcon} />
+                    <Text style={styles.productPrice}>₱{handlePrice(basePrice.Standard)}</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.sizeLabel}>Standard</Text>
+                </View>
+              </View>
+            </View>
+          )}
+        </View>
+      );
+    });
   
   const renderProductItem = ({ item }: { item: Product }) => (
     <ProductItem item={item} handleAddToOrder={handleAddToOrder} />
@@ -213,101 +174,252 @@ export default function TabOneScreen() {
     
     const total = subtotal - discountValue;
     return { subtotal, discountValue, total };
-  }, [order, discount]);
+  }, [order, discount]);  
 
   const handleConfirmOrder = useCallback(async () => {
     if (!customerName.trim()) {
-      Alert.alert('Missing Customer Name', 'Please enter the customer name before confirming the order.');
-      return;
+        Alert.alert('Missing Customer Name', 'Please enter the customer name before confirming the order.');
+        return;
     }
-  
+
     if (order.length === 0) {
-      Alert.alert('No Products in Order', 'Please add at least one product to the order before confirming.');
-      return;
+        Alert.alert('No Products in Order', 'Please add at least one product to the order before confirming.');
+        return;
     }
-  
+
     Alert.alert(
-      'Confirm Order',
-      'Are you sure you want to confirm this order?',
-      [
-        {
-          text: 'Cancel',
-          onPress: () => {
-            Alert.alert('Order Canceled');
-          },
-          style: 'cancel',
-        },
-        {
-          text: 'Confirm',
-          
-          onPress: async () => {
-            const formatToTwoDecimalPlaces = (value: number) => value.toFixed(2);
+        'Confirm Order',
+        'Are you sure you want to confirm this order?',
+        [
+            {
+                text: 'Cancel',
+                onPress: () => {
+                    Alert.alert('Order Canceled');
+                },
+                style: 'cancel',
+            },
+            {
+                text: 'Confirm',
+                onPress: async () => {
+                    try {
+                        const formatToTwoDecimalPlaces = (value: number) => value.toFixed(2);
+                        const formatDate = () => {
+                            const currentDate = new Date();
+                            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-            const formatDate = () => {
-              const currentDate = new Date();
-              const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-              const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  
-              const dayName = days[currentDate.getUTCDay()];
-              const monthName = months[currentDate.getUTCMonth()];
-              const day = currentDate.getUTCDate();
-              const year = currentDate.getUTCFullYear();
-              const hours = String(currentDate.getUTCHours()).padStart(2, '0');
-              const minutes = String(currentDate.getUTCMinutes()).padStart(2, '0');
-              const seconds = String(currentDate.getUTCSeconds()).padStart(2, '0');
-  
-              return `${dayName} ${monthName} ${day} ${hours}:${minutes}:${seconds} GMT ${year}`;
-            };1  
+                            const dayName = days[currentDate.getUTCDay()];
+                            const monthName = months[currentDate.getUTCMonth()];
+                            const day = currentDate.getUTCDate();
+                            const year = currentDate.getUTCFullYear();
+                            const hours = String(currentDate.getUTCHours()).padStart(2, '0');
+                            const minutes = String(currentDate.getUTCMinutes()).padStart(2, '0');
+                            const seconds = String(currentDate.getUTCSeconds()).padStart(2, '0');
 
-            const newOrder: Record<string, any> = {
-              CustomerName: customerName,
-              Discount: formatToTwoDecimalPlaces(discountValue),
-              OrderDateTime: formatDate(),
-              Preference: dineIn ? 'Dine In' : 'Take Out',
-              StaffName: cashierName,
-              Subtotal: formatToTwoDecimalPlaces(subtotal),
-              Total: formatToTwoDecimalPlaces(total),
-            };
-  
-            order.forEach((item, index) => {
-              newOrder[`Order_${index + 1}`] = {
-                Price: formatToTwoDecimalPlaces(item.price),
-                ProductName: item.product.Name,
-                Quantity: item.quantity,
-                Size: item.size,
-                Variation: item.variation,
-              };
-            });
-  
-            console.log('New Order Payload:', newOrder);
-  
-            try {
-              const db = getDatabase(firebase_app); // Get the Firebase database instance
-              const ordersRef = ref(db, 'orders'); // Reference to 'orders' node in Firebase
-              const orderNumberRef = ref(db, 'orderNumber'); // Reference to 'orderNumber' node in Firebase
-  
-              const currentOrderNumber = orderNumber.toString();
-  
-              await set(ref(db, `orders/${currentOrderNumber}`), newOrder);
-              const nextOrderNumber = orderNumber + 1;
-              await set(orderNumberRef, nextOrderNumber);
-  
-              Alert.alert('Order Confirmed', 'Your order has been successfully confirmed.');
-  
-              setOrderNumber(nextOrderNumber);
-              await saveOrderNumber(nextOrderNumber);
-              clearOrder();
-            } catch (error) {
-              Alert.alert('Error', 'An error occurred while confirming the order.');
-              console.error(error);
-            }
-          },
-        },
-      ],
-      { cancelable: false }
+                            return `${dayName} ${monthName} ${day} ${hours}:${minutes}:${seconds} GMT ${year}`;
+                        };
+
+                        const newOrder: Record<string, any> = {
+                            CustomerName: customerName,
+                            Discount: formatToTwoDecimalPlaces(discountValue),
+                            OrderDateTime: formatDate(),
+                            Preference: dineIn ? 'Dine In' : 'Take Out',
+                            StaffName: cashierName,
+                            Subtotal: formatToTwoDecimalPlaces(subtotal),
+                            Total: formatToTwoDecimalPlaces(total),
+                        };
+
+                        order.forEach((item, index) => {
+                            newOrder[`Order_${index + 1}`] = {
+                                Price: formatToTwoDecimalPlaces(item.price),
+                                ProductName: item.product.Name,
+                                Quantity: item.quantity,
+                                Size: item.size,
+                                Variation: item.variation,
+                            };
+                        });
+
+                        console.log('New Order:', newOrder);
+
+                        const db = getDatabase(firebase_app);
+                        const ordersRef = ref(db, 'orders');
+                        const orderNumberRef = ref(db, 'orderNumber');
+                        const currentOrderNumber = orderNumber.toString();
+                        console.log('Current Order Number:', currentOrderNumber);
+
+                        await set(ref(db, `orders/${currentOrderNumber}`), newOrder);
+                        const nextOrderNumber = orderNumber + 1;
+                        console.log('Next Order Number:', nextOrderNumber);
+                        await set(orderNumberRef, nextOrderNumber);
+
+                        // Fetch stocks data
+                        const utensilsRef = ref(db, 'stocks/Utensils');
+                        const utensilsSnapshot = await get(utensilsRef);
+                        const utensils = utensilsSnapshot.val();
+                        console.log('Utensil Stocks:', utensils);
+
+                        const ingredientsRef = ref(db, 'stocks/Ingredients');
+                        const ingredientsSnapshot = await get(ingredientsRef);
+                        const ingredients = ingredientsSnapshot.val();
+                        console.log('Ingredients Stocks:', ingredients);
+
+                        const updatedIngredients = { ...ingredients };
+                        const updatedUtensils = { ...utensils };
+
+                        // Decrement ingredient stocks based on variation
+                        for (const item of order) {
+                            if (item.variation === 'Standard') {
+                                console.log('Processing Standard Variation for Item:', item);
+                                let itemProcessed = false;
+
+                                // Process cakes
+                                if (updatedIngredients.Cakes && typeof updatedIngredients.Cakes === 'object') {
+                                    let cakeItem = null;
+
+                                    // Iterate through Cakes object
+                                    for (const cakeKey in updatedIngredients.Cakes) {
+                                        if (updatedIngredients.Cakes.hasOwnProperty(cakeKey)) {
+                                            const cake = updatedIngredients.Cakes[cakeKey];
+                                            if (cake.name === item.product.Name) {
+                                                cakeItem = cake;
+                                                break;
+                                            }
+                                        }
+                                    }
+
+                                    if (cakeItem) {
+                                        console.log('Found Cake Item:', cakeItem);
+                                        cakeItem.stocks.slice -= item.quantity; // Subtract slices based on order quantity
+                                        console.log(`Updated Slices for ${cakeItem.name}:`, cakeItem.stocks.slice);
+
+                                        // Log the slice decrement
+                                        await logStockHistory(cakeItem.name, -item.quantity);  // Log slice decrement
+
+                                        // Handle whole cake decrement if needed
+                                        if (cakeItem.stocks.slice < 0) {
+                                            const wholeCakesToDecrement = Math.ceil(Math.abs(cakeItem.stocks.slice) / 8);
+                                            cakeItem.stocks.whole -= wholeCakesToDecrement; // Decrease whole cakes
+                                            cakeItem.stocks.slice = (cakeItem.stocks.slice % 8) + 8; // Adjust remaining slices if negative
+                                            console.log(`Updated Whole Cakes for ${cakeItem.name}:`, cakeItem.stocks.whole);
+
+                                            // Log the whole cake decrement
+                                            await logStockHistory(cakeItem.name, -wholeCakesToDecrement);  // Log whole cake decrement
+                                        }
+
+                                        itemProcessed = true;
+                                    }
+                                }
+
+                                // Process non-cake standard items
+                                if (!itemProcessed) {
+                                    for (const category in updatedIngredients) {
+                                        console.log('Checking Category:', category);
+                                        if (typeof updatedIngredients[category] === 'object') {
+                                            for (const productKey in updatedIngredients[category]) {
+                                                if (updatedIngredients[category].hasOwnProperty(productKey)) {
+                                                    const product = updatedIngredients[category][productKey];
+                                                    console.log(`Checking Product: ${product.name}`);
+
+                                                    if (product.name === item.product.Name) {
+                                                        console.log('Found Matching Non-Cake Item:', product.name);
+                                                        product.stocks -= item.quantity;
+                                                        console.log(`Updated Stocks for ${product.name}:`, product.stocks);
+
+                                                        // Log stock change
+                                                        await logStockHistory(product.name, -item.quantity);  // Log stock change
+                                                        itemProcessed = true;
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        if (itemProcessed) break;
+                                    }
+                                }
+
+                                if (!itemProcessed) {
+                                    console.log(`Item not found in ingredients: ${item.product.Name}`);
+                                }
+                            }
+                        }
+
+                        // Process utensil stocks for Take Out
+                        if (newOrder.Preference === 'Take Out') {
+                            for (const item of order) {
+                                console.log('Processing Utensils for Take Out, Item:', item);
+
+                                if (item.variation === 'Hot' && updatedUtensils.util3.stocks > 0) {
+                                    updatedUtensils.util3.stocks -= item.quantity;
+                                    console.log('Updated Paper Cups:', updatedUtensils.util3.stocks);
+                                    await logStockHistory('Paper Cups', -item.quantity);  // Log stock change
+                                } else if (item.variation === 'Iced') {
+                                    if (updatedUtensils.util1.stocks > 0) {
+                                        updatedUtensils.util1.stocks -= item.quantity;
+                                        console.log('Updated Straws:', updatedUtensils.util1.stocks);
+                                        await logStockHistory('Straws', -item.quantity);  // Log stock change
+                                    }
+                                    if (updatedUtensils.util2.stocks > 0) {
+                                        updatedUtensils.util2.stocks -= item.quantity;
+                                        console.log('Updated Cups:', updatedUtensils.util2.stocks);
+                                        await logStockHistory('Cups', -item.quantity);  // Log stock change
+                                    }
+                                } else if (item.variation === 'Standard') {
+                                    if (updatedUtensils.util4.stocks > 0) {
+                                        updatedUtensils.util4.stocks -= item.quantity;
+                                        console.log('Updated Wooden Sporks:', updatedUtensils.util4.stocks);
+                                        await logStockHistory('Wooden Sporks', -item.quantity);  // Log stock change
+                                    }
+                                    if (updatedUtensils.util5.stocks > 0) {
+                                        updatedUtensils.util5.stocks -= item.quantity;
+                                        console.log('Updated Takeout Tupperwares:', updatedUtensils.util5.stocks);
+                                        await logStockHistory('Takeout Tupperwares', -item.quantity);  // Log stock change
+                                    }
+                                }
+                            }
+                        }
+
+                        // Save updated stocks
+                        await set(utensilsRef, updatedUtensils);
+                        console.log('Utensils updated successfully.');
+                        await set(ingredientsRef, updatedIngredients);
+                        console.log('Ingredients updated successfully.');
+
+                        Alert.alert('Order Confirmed', 'Your order has been successfully confirmed.');
+
+                        setOrderNumber(nextOrderNumber);
+                        await saveOrderNumber(nextOrderNumber);
+                        clearOrder();
+                    } catch (error) {
+                        Alert.alert('Error', 'An error occurred while confirming the order.');
+                        console.error(error);
+                    }
+                },
+            },
+        ],
+        { cancelable: false }
     );
   }, [customerName, order, discountValue, subtotal, total, orderNumber, dineIn, cashierName]);
-  
+
+  // Function to log stock history
+  const logStockHistory = async (itemName: string, quantityChange: number) => {
+    const db = getDatabase(firebase_app);
+    const historyRef = ref(db, 'stocksHistory');
+
+    const currentDate = new Date();
+    const localDate = new Date(currentDate.getTime() - currentDate.getTimezoneOffset() * 60000);
+    const formattedDate = localDate.toISOString().split('T')[0];
+
+    const newEntry = {
+      Date: formattedDate, // You can create a function to format the current date
+      ItemName: itemName,
+      Actions: 'Ordered',
+      Quantity: quantityChange,
+    };
+
+    // Add the new entry to the stocks history
+    await push(historyRef, newEntry);
+  };
+
   const saveOrderNumber = async (orderNumber: number) => {
     try {
       await AsyncStorage.setItem('orderNumber', orderNumber.toString());
@@ -333,7 +445,6 @@ export default function TabOneScreen() {
       setOrderNumber(1); // Default to 1 if an error occurs
     }
   };
-  
 
   const addProductToOrder = useCallback((product: Product, variation: string, size: string, price: number) => {
     setOrder(prevOrder => {
@@ -526,344 +637,3 @@ export default function TabOneScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-    backgroundColor: '#F5F7F8',
-    flexDirection: 'row'
-  },
-  leftcontainer:{
-    flex: 1,
-    flexDirection: 'column',
-  },
-  rightcontainer:{
-    flexDirection: 'column',
-    minWidth: 340,
-    width: 340,
-    paddingTop: 10,
-  },
-  ordersum:{
-    width: 50,
-    height: 60,
-    borderRadius: 4,
-    marginRight: 0,
-  },
-  orderName: {
-    flexDirection: 'column',
-    fontSize: 11,
-    width: 65,
-  },
-  headerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-    marginRight: 10,
-  },
-  logo: {
-    width: 100,
-    height: 100,
-    resizeMode: 'contain',
-    marginRight: 20,
-  },
-  titleSearchContainer: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  pageTitle: {
-    fontSize: 26,
-    color: '#203B36',
-    fontWeight: 'bold',
-    marginBottom: 14,
-    marginTop: 20,
-    fontFamily: 'Poppins-Black',
-  },
-  searchBarContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    borderColor: '#DDB04B',
-    width: '100%',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    backgroundColor: '#fff',
-    shadowColor: '#203B36',
-    elevation: 8,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchBar: {
-    flex: 1,
-    height: 40,
-    color: '#DDB04B',
-  },
-  categoryContainer: {
-    paddingVertical: 10,
-  },
-  categoryButton: {
-    marginHorizontal: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    backgroundColor: '#DDB04B',
-    height: 40,
-    width: 100,
-    borderRadius: 5,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 40,
-    shadowColor: '#DDB04B',
-    elevation: 8,
-  },
-  categoryButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0A1D1A',
-    fontFamily: 'Poppins-Regular'
-  },
-  mainContent: {
-    flexDirection: 'row',
-    flex: 30,
-    height: '100%',
-  },
-  productsContainer: {
-    paddingBottom: 4,
-  },
-  productsFlatList: {
-    flex: 1,
-  },
-  row: {
-    justifyContent: 'space-between',
-  },
-  product: {
-    flex: 1,
-    margin: 14,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    height: width * 0.50,
-    shadowColor: '#203B36',
-    elevation: 8,
-    alignItems: 'center'
-  },
-  productImage: {
-    width: '100%',
-    height: '30%',
-    borderRadius: 8,
-    marginBottom: 5,
-  },
-  productName: {
-    fontSize: 20,
-    marginBottom: 2,
-    margin: 10,
-    fontWeight: 'bold',
-    color: '#DDB04B',
-    textAlign: 'left',
-    fontFamily: 'Poppins-Regular'
-  },
-  productCategory: {
-    fontSize: 14,
-    color: '#122D28',
-    marginBottom: 8,
-  },
-  stockStatus: {
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  inStock: {
-    color: 'green',
-  },
-  outOfStock: {
-    color: 'red',
-  },
-  disabledButton: {
-    backgroundColor: '#888',
-  },
-  priceContainer: {
-    width: '100%',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignContent: 'center',
-    alignSelf: 'center',
-    alignItems: 'center',
-    margin: 10,
-  },
-  priceWrapper: {
-    alignItems: 'center',
-    margin: 4,
-  },
-  priceButton: {
-    width: '100%',
-    backgroundColor: '#DDB04B',
-    padding: 8,
-    borderRadius: 5,
-    flexDirection: 'column',
-    alignItems: 'center',
-  },
-  productPrice: {
-    color: '#122D28',
-    fontSize: 10,
-    fontWeight: 'bold',
-    marginLeft: 0,
-    fontFamily: 'Poppins-Regular'
-  },
-  cupIcon: {
-    marginRight: 0,
-  },
-  sizeLabel: {
-    marginTop: 4,
-    fontSize: 12,
-    color: '#203B36',
-    fontFamily: 'Poppins-Regular'
-  },
-  variationTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#DDB04B',
-    marginBottom: -2,
-    marginTop: -5,
-    margin: 10,
-    width: '100%',
-    fontFamily: 'Poppins-Regular',
-    alignItems: 'center',
-  },
-  orderSummaryContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    width: '100%', 
-    maxWidth: 340, 
-    shadowColor: '#203B36',
-    elevation: 10,
-    margin: 10, 
-    alignSelf: 'center',
-    height: '100%',
-  },
-  orderSummary:{
-    flex: 1
-  },
-  orderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-    marginTop: 12,
-    marginHorizontal: 12,
-  },
-  orderNumber: {
-    color: '#DDB04B',
-    fontSize: 18,
-    fontFamily: 'Poppins-Bold',
-    marginHorizontal: 10,
-  },
-  clearAll: {
-    color: '#FF0000',
-    fontFamily: 'Poppins-Bold',
-    marginHorizontal: 10,
-  },
-  customerNameInput: {
-    backgroundColor: '#fff',
-    color: '#DDB04B',
-    borderRadius: 5,
-    padding: 10,
-    fontFamily: 'Poppins-Regular',
-    shadowColor: '#203B36',
-    elevation: 10,
-    marginHorizontal: 12,
-    marginTop: 15,
-  },
-  productList: {
-    marginBottom: -10,
-    marginHorizontal: 12,
-    width: '100%',
-    fontSize: 8,
-    height: 80,
-    minHeight: 60,
-    overflow: 'hidden',
-  },
-  productItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 5,
-    marginHorizontal: 8,
-    fontWeight: '800',
-    fontFamily: 'Poppins-ExtraBold',
-  },
-  summaryDetails: {
-    marginBottom: 10,
-    fontFamily: 'Poppins-Regular',
-    justifyContent: 'space-between',
-    marginHorizontal: 12,
-    marginTop: 20,
-  },
-  dineInTakeOut: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-    marginHorizontal: 12,
-    marginTop: 10,
-  },
-  dineOption: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    backgroundColor: '#A9A9A9',
-    borderRadius: 5,
-    marginHorizontal: 5,
-    alignItems: 'center',
-  },
-  selectedOption: {
-    backgroundColor: '#E8B86D',
-    borderColor: '#DDB04B',
-    borderWidth: 2,
-  },
-  printButton: {
-    backgroundColor: '#203B36',
-    borderRadius: 5,
-    paddingVertical: 10,
-    marginHorizontal: 16,
-    alignItems: 'center',
-    marginBottom: 12,
-    shadowColor: '#203B36',
-    elevation: 8,
-  },
-  printButtonText: {
-    color: '#fff',
-    fontFamily: 'Poppins-Bold',
-  },
-  picker: {
-    width: '100%',
-    height: 30,
-  },
-  pickerWrapper: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 5,
-    marginVertical: 10,
-    height: 55,
-    overflow: 'hidden',
-  },
-  cashier: {
-    marginBottom: 8,
-    fontSize: 12,
-    opacity: 40,
-    marginHorizontal: 22,
-  },
-  counterContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    marginEnd: 12,
-  },
-  counterButton: {
-    backgroundColor: '#006400', 
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-    padding: 10,
-    borderRadius: 20, 
-    marginHorizontal: 10,
-    textAlign: 'center',
-    minWidth: 40, 
-  }
-});
