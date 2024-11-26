@@ -531,9 +531,10 @@ export default function TabFourScreen() {
         </View>
 
         {/* Right Column: Content Section */}
-        <ScrollView style={styles.detailsSection}>
-          {renderSectionContent()}
-        </ScrollView>
+        <View style={styles.detailsSection}>
+        {renderSectionContent()}
+      </View>
+
       </View>
     </View>
   );
