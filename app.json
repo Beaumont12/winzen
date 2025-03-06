@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "winzen",
-    "slug": "winzen",
+    "slug": "winzen_app",
     "version": "1.0.0",
     "orientation": "landscape",
     "icon": "./assets/images/icon.png",
@@ -19,7 +19,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/resizedlogo.png",
         "backgroundColor": "#203B36"
-      }
+      },
+      "package": "com.inin_r.winzen_app"
     },
     "web": {
       "bundler": "metro",
@@ -31,6 +32,11 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "801af0b4-08ba-405f-8d31-d88e5de59631"
+      }
     }
   }
 }
